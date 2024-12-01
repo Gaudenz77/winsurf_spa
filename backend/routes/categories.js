@@ -10,15 +10,22 @@ router.use(verifyToken);
 router.get('/', async (req, res) => {
   try {
     console.log('Getting categories for user:', req.user.userId);
+    
+    // Modified query to show all system categories (created_by IS NULL) and user's custom categories
     const [categories] = await pool.query(
-      'SELECT * FROM categories WHERE created_by = ? OR created_by IS NULL ORDER BY name',
+      'SELECT * FROM categories WHERE created_by IS NULL OR created_by = ? ORDER BY name',
       [req.user.userId]
     );
+    
     console.log('Found categories:', categories);
+    console.log('SQL Query:', 'SELECT * FROM categories WHERE created_by IS NULL OR created_by = ? ORDER BY name');
+    console.log('Query parameters:', [req.user.userId]);
+    
+    // Send categories in response
     res.json({ categories });
   } catch (error) {
     console.error('Get categories error:', error);
-    res.status(500).json({ message: 'Error fetching categories' });
+    res.status(500).json({ message: 'Error fetching categories', error: error.message });
   }
 });
 
@@ -41,10 +48,14 @@ router.post('/', async (req, res) => {
       [result.insertId]
     );
 
+    console.log('Created new category:', newCategory[0]);
+    console.log('SQL Query:', 'INSERT INTO categories (name, color, created_by) VALUES (?, ?, ?)');
+    console.log('Query parameters:', [name, color || '#808080', req.user.userId]);
+
     res.status(201).json({ category: newCategory[0] });
   } catch (error) {
     console.error('Create category error:', error);
-    res.status(500).json({ message: 'Error creating category' });
+    res.status(500).json({ message: 'Error creating category', error: error.message });
   }
 });
 
@@ -74,10 +85,14 @@ router.put('/:id', async (req, res) => {
       [categoryId]
     );
 
+    console.log('Updated category:', updatedCategory[0]);
+    console.log('SQL Query:', 'UPDATE categories SET name = ?, color = ? WHERE id = ?');
+    console.log('Query parameters:', [name, color, categoryId]);
+
     res.json({ category: updatedCategory[0] });
   } catch (error) {
     console.error('Update category error:', error);
-    res.status(500).json({ message: 'Error updating category' });
+    res.status(500).json({ message: 'Error updating category', error: error.message });
   }
 });
 
@@ -103,10 +118,15 @@ router.delete('/:id', async (req, res) => {
     );
 
     await pool.query('DELETE FROM categories WHERE id = ?', [categoryId]);
+
+    console.log('Deleted category:', categoryId);
+    console.log('SQL Query:', 'DELETE FROM categories WHERE id = ?');
+    console.log('Query parameters:', [categoryId]);
+
     res.json({ message: 'Category deleted successfully' });
   } catch (error) {
     console.error('Delete category error:', error);
-    res.status(500).json({ message: 'Error deleting category' });
+    res.status(500).json({ message: 'Error deleting category', error: error.message });
   }
 });
 

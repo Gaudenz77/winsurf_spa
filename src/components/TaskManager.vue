@@ -266,32 +266,28 @@ const newTask = ref({
 
 // Load initial data
 onMounted(async () => {
-  await loadInitialData()
-})
-
-const loadInitialData = async () => {
   try {
     console.log('Starting to load initial data...')
     // Load data sequentially to ensure categories and users are available
     const loadedCategories = await categoryService.getCategories()
     console.log('Loaded categories:', loadedCategories)
-    categories.value = loadedCategories
+    categories.value = loadedCategories || []
 
     const loadedUsers = await userService.getUsers()
     console.log('Loaded users:', loadedUsers)
-    users.value = loadedUsers
+    users.value = loadedUsers || []
 
     const loadedTasks = await taskService.getTasks()
     console.log('Loaded tasks:', loadedTasks)
-    tasks.value = loadedTasks
+    tasks.value = loadedTasks || []
   } catch (error) {
-    console.error('Error loading initial data:', error)
+    console.error('Error loading initial data:', error.response?.data || error)
     // Ensure refs are initialized even if there's an error
     categories.value = categories.value || []
     users.value = users.value || []
     tasks.value = tasks.value || []
   }
-}
+})
 
 // Load tasks from API
 const loadTasks = async () => {
@@ -305,20 +301,38 @@ const loadTasks = async () => {
 // Load categories
 const loadCategories = async () => {
   try {
-    categories.value = await categoryService.getCategories()
+    console.log('Loading categories...')
+    const loadedCategories = await categoryService.getCategories()
+    console.log('Categories loaded:', loadedCategories)
+    if (Array.isArray(loadedCategories)) {
+      categories.value = loadedCategories
+      console.log('Categories set to:', categories.value)
+    } else {
+      console.error('Loaded categories is not an array:', loadedCategories)
+      categories.value = []
+    }
   } catch (error) {
-    console.error('Error loading categories:', error)
-    categories.value = [] // Initialize to empty array if error
+    console.error('Error loading categories:', error.response?.data || error)
+    categories.value = []
   }
 }
 
 // Load users
 const loadUsers = async () => {
   try {
-    users.value = await userService.getUsers()
+    console.log('Loading users...')
+    const loadedUsers = await userService.getUsers()
+    console.log('Users loaded:', loadedUsers)
+    if (Array.isArray(loadedUsers)) {
+      users.value = loadedUsers
+      console.log('Users set to:', users.value)
+    } else {
+      console.error('Loaded users is not an array:', loadedUsers)
+      users.value = []
+    }
   } catch (error) {
-    console.error('Error loading users:', error)
-    users.value = [] // Initialize to empty array if error
+    console.error('Error loading users:', error.response?.data || error)
+    users.value = []
   }
 }
 

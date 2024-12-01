@@ -5,12 +5,14 @@ const API_URL = 'http://localhost:3000'
 class UserService {
   async getUsers() {
     try {
+      console.log('Fetching users from:', `${API_URL}/api/users`)
       const response = await axios.get(`${API_URL}/api/users`, {
         withCredentials: true
       })
-      return response.data.users
+      console.log('Users response:', response.data)
+      return response.data.users || []
     } catch (error) {
-      console.error('Error fetching users:', error)
+      console.error('Error fetching users:', error.response?.data || error)
       return [] // Return empty array instead of throwing
     }
   }
@@ -27,9 +29,9 @@ class UserService {
     }
   }
 
-  async updateUser(userId, userData) {
+  async updateUser(userData) {
     try {
-      const response = await axios.put(`${API_URL}/api/users/${userId}`, userData, {
+      const response = await axios.put(`${API_URL}/api/users/me`, userData, {
         withCredentials: true
       })
       return response.data.user

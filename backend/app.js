@@ -17,6 +17,13 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
+// Debug middleware to log all requests
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  console.log('Headers:', req.headers);
+  next();
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/tasks', tasksRoutes);
