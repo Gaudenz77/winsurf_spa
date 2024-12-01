@@ -89,7 +89,7 @@ import { authService } from './services/authService'
 import { sessionService } from './services/sessionService'
 
 const theme = ref('light')
-const themes = ['light', 'dark', 'cyberpunk', 'cupcake', 'dracula']
+const themes = ['light', 'dark', 'cyberpunk', 'cupcake', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter']
 const showAuth = ref(false)
 const isAuthenticated = ref(false)
 const currentUser = ref(null)
