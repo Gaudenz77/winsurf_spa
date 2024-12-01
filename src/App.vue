@@ -2,7 +2,7 @@
   <div class="min-h-screen flex flex-col" :data-theme="theme">
     <nav class="navbar bg-base-100 shadow-lg h-16">
       <div class="flex-1">
-        <a class="btn btn-ghost normal-case text-xl">Winsurf SPA</a>
+        <a class="btn btn-ghost normal-case text-xl">Windsurf SPA / small errors are cute...</a>
       </div>
       <div class="flex-none gap-2">
         <!-- Theme Selector - Always visible -->
