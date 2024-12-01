@@ -38,6 +38,7 @@
             </div>
           </label>
           <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+            <li><a @click="showSettings = true">Settings</a></li>
             <li><a @click="logout">Logout</a></li>
           </ul>
         </div>
@@ -70,6 +71,23 @@
           </div>
           <p class="text-lg mb-8">Manage your tasks efficiently with our task management system.</p>
           
+          <!-- User Settings Modal -->
+          <dialog :open="showSettings" class="modal">
+            <div class="modal-box w-11/12 max-w-3xl">
+              <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="showSettings = false">✕</button>
+              </form>
+              <UserSettings 
+                v-if="showSettings"
+                :current-user="currentUser"
+                @update:current-user="handleUserUpdate"
+              />
+            </div>
+            <form method="dialog" class="modal-backdrop">
+              <button @click="showSettings = false">close</button>
+            </form>
+          </dialog>
+
           <div class="mb-8">
             <h2 class="text-2xl font-bold mb-4">Your Tasks</h2>
             <TaskManager />
@@ -85,12 +103,14 @@ import { ref, computed, onMounted } from 'vue'
 import TaskManager from './components/TaskManager.vue'
 import Welcome from './components/Welcome.vue'
 import Auth from './components/Auth.vue'
+import UserSettings from './components/UserSettings.vue'
 import { authService } from './services/authService'
 import { sessionService } from './services/sessionService'
 
 const theme = ref('light')
 const themes = ['light', 'dark', 'cyberpunk', 'cupcake', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'lofi', 'nord']
 const showAuth = ref(false)
+const showSettings = ref(false)
 const isAuthenticated = ref(false)
 const currentUser = ref(null)
 
@@ -128,6 +148,12 @@ const logout = async () => {
   } catch (error) {
     console.error('Logout error:', error)
   }
+}
+
+// Methods
+const handleUserUpdate = (updatedUser) => {
+  currentUser.value = updatedUser
+  showSettings.value = false
 }
 
 // Initialize on mount

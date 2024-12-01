@@ -8,7 +8,13 @@ class SessionService {
 
   // Create a session
   async createSession(userData) {
-    this.currentUser.value = userData.user
+    this.currentUser.value = userData.user || userData
+    return userData
+  }
+
+  // Update session with new user data
+  updateSession(userData) {
+    this.currentUser.value = userData
     return userData
   }
 
