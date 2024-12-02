@@ -4,9 +4,9 @@
       <div class="flex-1">
         <a class="btn btn-ghost normal-case text-xl">Windsurf SPA / small errors are cute...</a>
       </div>
-      <div class="flex-none gap-2">
+      <div class="flex-none gap-2 nav-right">
         <!-- Theme Selector - Always visible -->
-        <div class="dropdown dropdown-end">
+        <div class="dropdown dropdown-end nav-item">
           <label tabindex="0" class="btn m-1">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6">
               <path stroke-linecap="round" stroke-linejoin="round" d="M4.098 19.902a3.75 3.75 0 005.304 0l6.401-6.402M6.75 21A3.75 3.75 0 013 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 003.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008z" />
@@ -23,24 +23,27 @@
         </div>
         
         <!-- User Menu - Only when authenticated -->
-        <div class="dropdown dropdown-end" v-if="isAuthenticated">
-          <label tabindex="0" class="btn btn-ghost btn-circle avatar">
-            <div class="w-10 rounded-full">
-              <img 
-                v-if="profileImageUrl" 
-                :src="profileImageUrl" 
-                alt="Profile"
-                class="w-full h-full object-cover"
-              />
-              <div v-else class="bg-neutral-focus text-black dark:text-white rounded-full w-10 h-10 flex items-center justify-center">
-                <span>{{ userInitials }}</span>
+        <div class="flex-none gap-2 nav-item" v-if="isAuthenticated">
+          <NotificationBell />
+          <div class="dropdown dropdown-end nav-item">
+            <label tabindex="0" class="btn btn-ghost btn-circle avatar">
+              <div class="w-10 rounded-full">
+                <img 
+                  v-if="profileImageUrl" 
+                  :src="profileImageUrl" 
+                  alt="Profile"
+                  class="w-full h-full object-cover"
+                />
+                <div v-else class="bg-neutral-focus text-black dark:text-white rounded-full w-10 h-10 flex items-center justify-center">
+                  <span>{{ userInitials }}</span>
+                </div>
               </div>
-            </div>
-          </label>
-          <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
-            <li><a @click="showSettings = true">Settings</a></li>
-            <li><a @click="logout">Logout</a></li>
-          </ul>
+            </label>
+            <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+              <li><a @click="showSettings = true">Settings</a></li>
+              <li><a @click="logout">Logout</a></li>
+            </ul>
+          </div>
         </div>
       </div>
     </nav>
@@ -104,6 +107,7 @@ import TaskManager from './components/TaskManager.vue'
 import Welcome from './components/Welcome.vue'
 import Auth from './components/Auth.vue'
 import UserSettings from './components/UserSettings.vue'
+import NotificationBell from './components/NotificationBell.vue'
 import { authService } from './services/authService'
 import { sessionService } from './services/sessionService'
 
@@ -179,3 +183,59 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: var(--color-background-soft);
+}
+
+.nav-left {
+  display: flex;
+  align-items: center;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.profile-picture {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.username {
+  margin: 0 0.5rem;
+}
+
+.logout-btn {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background-color: var(--color-background-mute);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+}
+
+.logout-btn:hover {
+  background-color: var(--color-background-soft);
+}
+</style>

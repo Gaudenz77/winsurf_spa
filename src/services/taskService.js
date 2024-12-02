@@ -10,7 +10,7 @@ class TaskService {
       });
       return response.data.tasks;
     } catch (error) {
-      console.error('Error fetching tasks:', error);
+      console.error('Error fetching tasks:', error.response?.data || error);
       return []; // Return empty array on error
     }
   }
@@ -24,12 +24,14 @@ class TaskService {
         reminder_date: task.reminder_date ? new Date(task.reminder_date).toISOString() : null
       };
 
+      console.log('Sending task data to server:', taskData);
       const response = await axios.post(`${API_URL}/api/tasks`, taskData, {
-        withCredentials: true,
+        withCredentials: true
       });
+      console.log('Server response:', response.data);
       return response.data.task;
     } catch (error) {
-      console.error('Error creating task:', error);
+      console.error('Error in createTask:', error.response?.data || error);
       throw error;
     }
   }
@@ -43,23 +45,26 @@ class TaskService {
         reminder_date: updates.reminder_date ? new Date(updates.reminder_date).toISOString() : null
       };
 
+      console.log('Sending task update:', updateData);
       const response = await axios.put(`${API_URL}/api/tasks/${taskId}`, updateData, {
         withCredentials: true,
       });
+      console.log('Server response:', response.data);
       return response.data.task;
     } catch (error) {
-      console.error('Error updating task:', error);
+      console.error('Error in updateTask:', error.response?.data || error);
       throw error;
     }
   }
 
   async deleteTask(taskId) {
     try {
-      await axios.delete(`${API_URL}/api/tasks/${taskId}`, {
+      const response = await axios.delete(`${API_URL}/api/tasks/${taskId}`, {
         withCredentials: true,
       });
+      console.log('Server response:', response.data);
     } catch (error) {
-      console.error('Error deleting task:', error);
+      console.error('Error in deleteTask:', error.response?.data || error);
       throw error;
     }
   }
@@ -69,9 +74,10 @@ class TaskService {
       const response = await axios.get(`${API_URL}/api/tasks/category/${categoryId}`, {
         withCredentials: true,
       });
+      console.log('Server response:', response.data);
       return response.data.tasks;
     } catch (error) {
-      console.error('Error fetching tasks by category:', error);
+      console.error('Error in getTasksByCategory:', error.response?.data || error);
       return []; // Return empty array on error
     }
   }
@@ -81,9 +87,10 @@ class TaskService {
       const response = await axios.get(`${API_URL}/api/tasks/assigned/${userId}`, {
         withCredentials: true,
       });
+      console.log('Server response:', response.data);
       return response.data.tasks;
     } catch (error) {
-      console.error('Error fetching tasks by assignee:', error);
+      console.error('Error in getTasksByAssignee:', error.response?.data || error);
       return []; // Return empty array on error
     }
   }
@@ -93,9 +100,10 @@ class TaskService {
       const response = await axios.get(`${API_URL}/api/tasks/overdue`, {
         withCredentials: true,
       });
+      console.log('Server response:', response.data);
       return response.data.tasks;
     } catch (error) {
-      console.error('Error fetching overdue tasks:', error);
+      console.error('Error in getOverdueTasks:', error.response?.data || error);
       return []; // Return empty array on error
     }
   }

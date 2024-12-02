@@ -339,13 +339,32 @@ const loadUsers = async () => {
 // Add new task
 const addTask = async () => {
   try {
-    console.log('Adding new task:', newTask.value);
-    const task = await taskService.createTask(newTask.value);
-    console.log('Task created successfully:', task);
-    tasks.value.unshift(task);
-    clearForm();
+    console.log('Original task data:', newTask.value);
+    const taskToCreate = {
+      ...newTask.value,
+      due_date: newTask.value.due_date ? new Date(new Date(newTask.value.due_date).getTime() + (60 * 60 * 1000)).toISOString() : null,
+      reminder_date: newTask.value.reminder_date ? new Date(new Date(newTask.value.reminder_date).getTime() + (60 * 60 * 1000)).toISOString() : null,
+      status: newTask.value.status || 'pending',
+      priority: newTask.value.priority || 'medium'
+    };
+
+    console.log('Creating task with data:', taskToCreate);
+    const createdTask = await taskService.createTask(taskToCreate);
+    console.log('Task created successfully:', createdTask);
+    tasks.value.unshift(createdTask);
+    
+    // Reset form
+    newTask.value = {
+      title: '',
+      description: '',
+      priority: 'medium',
+      status: 'pending',
+      due_date: '',
+      reminder_date: '',
+      assigned_to: ''
+    };
   } catch (error) {
-    console.error('Error adding task:', error.response?.data || error);
+    console.error('Error creating task:', error.response?.data || error);
   }
 }
 
@@ -361,22 +380,51 @@ const deleteTask = async (taskId) => {
 
 // Start editing task
 const startEdit = (task) => {
-  editingTask.value = { ...task }
+  editingTask.value = {
+    ...task,
+    due_date: task.due_date ? formatDateForInput(task.due_date) : '',
+    reminder_date: task.reminder_date ? formatDateForInput(task.reminder_date) : ''
+  }
 }
 
 // Save edited task
 const saveEdit = async () => {
   try {
-    const updatedTask = await taskService.updateTask(editingTask.value.id, editingTask.value)
-    const index = tasks.value.findIndex(t => t.id === editingTask.value.id)
-    if (index !== -1) {
-      tasks.value[index] = updatedTask
-      editingTask.value = null
+    console.log('Saving edited task:', editingTask.value);
+    const taskToUpdate = {
+      ...editingTask.value,
+      due_date: editingTask.value.due_date ? new Date(editingTask.value.due_date).toISOString() : null,
+      reminder_date: editingTask.value.reminder_date ? new Date(editingTask.value.reminder_date).toISOString() : null
+    };
+    
+    // Adjust timezone offset
+    if (taskToUpdate.due_date) {
+      const date = new Date(taskToUpdate.due_date);
+      const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+      taskToUpdate.due_date = new Date(date.getTime() - userTimezoneOffset).toISOString();
     }
+    
+    if (taskToUpdate.reminder_date) {
+      const date = new Date(taskToUpdate.reminder_date);
+      const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+      taskToUpdate.reminder_date = new Date(date.getTime() - userTimezoneOffset).toISOString();
+    }
+
+    const updatedTask = await taskService.updateTask(editingTask.value.id, taskToUpdate);
+    console.log('Task updated:', updatedTask);
+    
+    // Update the task in the list with the new data
+    const index = tasks.value.findIndex(t => t.id === editingTask.value.id);
+    if (index !== -1) {
+      tasks.value[index] = updatedTask;
+    }
+    
+    // Clear editing state
+    editingTask.value = null;
   } catch (error) {
-    console.error('Error saving task:', error)
+    console.error('Error saving task:', error);
   }
-}
+};
 
 // Cancel editing
 const cancelEdit = () => {
@@ -397,10 +445,26 @@ const getAssignedUserName = (userId) => {
   return user ? user.username : ''
 }
 
-const formatDate = (date) => {
-  if (!date) return ''
-  return new Date(date).toLocaleString()
-}
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+};
+
+const formatDateForInput = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  // Add one hour to compensate for timezone
+  const adjustedDate = new Date(date.getTime() + (60 * 60 * 1000));
+  return adjustedDate.toISOString().slice(0, 16); // Format as YYYY-MM-DDThh:mm
+};
 
 const isOverdue = (task) => {
   if (!task.due_date) return false
