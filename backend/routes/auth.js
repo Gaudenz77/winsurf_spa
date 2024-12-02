@@ -130,6 +130,47 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Check authentication status
+router.get('/check', async (req, res) => {
+  try {
+    const token = req.cookies.token;
+    
+    if (!token) {
+      return res.status(401).json({ message: 'No token found' });
+    }
+
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Get user data
+    const [users] = await pool.query(
+      'SELECT id, username, email, profile_image FROM users WHERE id = ?',
+      [decoded.userId]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const user = users[0];
+
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        profile_image: user.profile_image
+      }
+    });
+  } catch (error) {
+    if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+      return res.status(401).json({ message: 'Invalid or expired token' });
+    }
+    console.error('Auth check error:', error);
+    res.status(500).json({ message: 'Error checking authentication' });
+  }
+});
+
 // Logout user
 router.post('/logout', (req, res) => {
   res.clearCookie('token');

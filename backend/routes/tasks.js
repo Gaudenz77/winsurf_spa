@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/database');
 const { verifyToken } = require('../middleware/auth');
-const NotificationService = require('../services/notificationService');
 
 // Apply auth middleware to all routes
 router.use(verifyToken);
@@ -44,9 +43,6 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'Title is required' });
     }
 
-    console.log('Received task data:', req.body);
-
-    // Format dates to MySQL datetime format
     const formatDate = (dateString) => {
       if (!dateString) return null;
       const date = new Date(dateString);
@@ -55,56 +51,25 @@ router.post('/', async (req, res) => {
 
     const formattedDueDate = formatDate(due_date);
     const formattedReminderDate = formatDate(reminder_date);
-
-    // Convert empty string to null for assigned_to
     const assignedToValue = assigned_to === '' ? null : assigned_to;
 
-    console.log('Formatted dates:', {
-      original_due_date: due_date,
-      formatted_due_date: formattedDueDate,
-      original_reminder_date: reminder_date,
-      formatted_reminder_date: formattedReminderDate
-    });
-
     const [result] = await pool.query(
-      `INSERT INTO tasks (
-        title, 
-        description, 
-        priority,
-        status,
-        category_id,
-        due_date,
-        created_by,
-        assigned_to,
-        reminder_date,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-      [
-        title,
-        description,
-        priority,
-        status || 'pending',
-        category_id,
-        formattedDueDate,
-        req.user.userId,
-        assignedToValue,
-        formattedReminderDate
-      ]
+      `INSERT INTO tasks (title, description, priority, status, category_id, due_date, assigned_to, reminder_date, created_by, created_at) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      [title, description, priority, status, category_id, formattedDueDate, assignedToValue, formattedReminderDate, req.user.userId]
     );
 
-    // Create notification for assigned user if different from creator
-    if (assignedToValue && assignedToValue !== req.user.userId && req.app.get('notificationService')) {
+    // Create notification if task is assigned to someone
+    if (assignedToValue && assignedToValue !== req.user.userId) {
       const notificationService = req.app.get('notificationService');
       await notificationService.createNotification(
         assignedToValue,
         result.insertId,
         'TASK_ASSIGNED',
-        `You have been assigned a new task: ${title}`
+        `New task assigned to you: "${title}". Priority: ${priority}`
       );
     }
 
-    // Fetch the created task with category and user information
     const [task] = await pool.query(
       `SELECT t.*, c.name as category_name, u.username as assigned_username 
        FROM tasks t 
@@ -124,7 +89,6 @@ router.post('/', async (req, res) => {
 // Update task
 router.put('/:id', async (req, res) => {
   try {
-    console.log('Updating task with data:', req.body);
     const { 
       title, 
       description, 
@@ -135,19 +99,17 @@ router.put('/:id', async (req, res) => {
       assigned_to,
       reminder_date 
     } = req.body;
-    const taskId = req.params.id;
 
     // Get current task data
     const [currentTask] = await pool.query(
-      'SELECT * FROM tasks WHERE id = ? AND (created_by = ? OR assigned_to = ?)',
-      [taskId, req.user.userId, req.user.userId]
+      'SELECT * FROM tasks WHERE id = ?',
+      [req.params.id]
     );
 
-    if (currentTask.length === 0) {
+    if (!currentTask[0]) {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    // Format dates to MySQL datetime format
     const formatDate = (dateString) => {
       if (!dateString) return null;
       const date = new Date(dateString);
@@ -156,92 +118,75 @@ router.put('/:id', async (req, res) => {
 
     const formattedDueDate = formatDate(due_date);
     const formattedReminderDate = formatDate(reminder_date);
-
-    console.log('Formatted dates:', {
-      original_due_date: due_date,
-      formatted_due_date: formattedDueDate,
-      original_reminder_date: reminder_date,
-      formatted_reminder_date: formattedReminderDate
-    });
+    const assignedToValue = assigned_to === '' ? null : assigned_to;
 
     await pool.query(
-      `UPDATE tasks SET 
-        title = ?, 
-        description = ?, 
-        priority = ?,
-        status = ?,
-        category_id = ?,
-        due_date = ?,
-        assigned_to = ?,
-        reminder_date = ?,
-        updated_at = CURRENT_TIMESTAMP
+      `UPDATE tasks 
+       SET title = ?, description = ?, priority = ?, status = ?, 
+           category_id = ?, due_date = ?, assigned_to = ?, reminder_date = ?, 
+           updated_at = CURRENT_TIMESTAMP 
        WHERE id = ?`,
-      [
-        title,
-        description,
-        priority,
-        status,
-        category_id,
-        formattedDueDate,
-        assigned_to,
-        formattedReminderDate,
-        taskId
-      ]
+      [title, description, priority, status, category_id, formattedDueDate, 
+       assignedToValue, formattedReminderDate, req.params.id]
     );
 
-    // Fetch updated task with category and user information
+    // Create notifications for relevant changes
+    const notificationService = req.app.get('notificationService');
+
+    // Notification for assignment change
+    if (assignedToValue && assignedToValue !== currentTask[0].assigned_to) {
+      await notificationService.createNotification(
+        assignedToValue,
+        req.params.id,
+        'TASK_ASSIGNED',
+        `New task assigned to you: "${title}". Priority: ${priority}`
+      );
+    }
+
+    // Notification for status change
+    if (status !== currentTask[0].status && currentTask[0].assigned_to) {
+      await notificationService.createNotification(
+        currentTask[0].assigned_to,
+        req.params.id,
+        'TASK_STATUS_CHANGED',
+        `Task "${title}" status has been changed from "${currentTask[0].status}" to "${status}"`
+      );
+    }
+
+    // Notification for due date change
+    if (formattedDueDate !== currentTask[0].due_date && currentTask[0].assigned_to) {
+      const newDate = new Date(formattedDueDate).toLocaleDateString();
+      await notificationService.createNotification(
+        currentTask[0].assigned_to,
+        req.params.id,
+        'TASK_DUE_DATE_CHANGED',
+        `Due date for task "${title}" has been updated to ${newDate}`
+      );
+    }
+
+    // Notification for priority change
+    if (priority !== currentTask[0].priority && currentTask[0].assigned_to) {
+      await notificationService.createNotification(
+        currentTask[0].assigned_to,
+        req.params.id,
+        'TASK_PRIORITY_CHANGED',
+        `Priority for task "${title}" has been changed from "${currentTask[0].priority}" to "${priority}"`
+      );
+    }
+
     const [updatedTask] = await pool.query(
       `SELECT t.*, c.name as category_name, u.username as assigned_username 
        FROM tasks t 
        LEFT JOIN categories c ON t.category_id = c.id 
        LEFT JOIN users u ON t.assigned_to = u.id 
        WHERE t.id = ?`,
-      [taskId]
+      [req.params.id]
     );
 
-    // Send notifications based on changes
-    if (assigned_to && assigned_to !== currentTask[0].assigned_to && req.app.get('notificationService')) {
-      const notificationService = req.app.get('notificationService');
-      // New assignment notification
-      await notificationService.createNotification(
-        assigned_to,
-        taskId,
-        'TASK_ASSIGNED',
-        `You have been assigned a new task: ${title}`
-      );
-    }
-
-    if (status !== currentTask[0].status) {
-      // Status change notification
-      if (currentTask[0].assigned_to) {
-        const notificationService = req.app.get('notificationService');
-        await notificationService.createNotification(
-          currentTask[0].assigned_to,
-          taskId,
-          'TASK_UPDATED',
-          `status changed to ${status}`
-        );
-      }
-    }
-
-    if (priority !== currentTask[0].priority) {
-      // Priority change notification
-      if (currentTask[0].assigned_to) {
-        const notificationService = req.app.get('notificationService');
-        await notificationService.createNotification(
-          currentTask[0].assigned_to,
-          taskId,
-          'TASK_UPDATED',
-          `priority changed to ${priority}`
-        );
-      }
-    }
-
-    console.log('Task updated successfully:', updatedTask[0]);
     res.json({ task: updatedTask[0] });
   } catch (error) {
     console.error('Update task error:', error);
-    res.status(500).json({ message: 'Error updating task', error: error.message });
+    res.status(500).json({ message: 'Error updating task' });
   }
 });
 

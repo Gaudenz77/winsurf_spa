@@ -3,23 +3,46 @@ const pool = require('../config/database');
 class NotificationService {
     constructor(wsServer) {
         this.wsServer = wsServer;
+        this.notificationTypes = {
+            TASK_ASSIGNED: 'task_assigned',
+            TASK_STATUS_CHANGED: 'task_status_changed',
+            TASK_DUE_DATE_CHANGED: 'task_due_date_changed',
+            TASK_PRIORITY_CHANGED: 'task_priority_changed',
+            TASK_COMPLETED: 'task_completed',
+            TASK_REMINDER: 'task_reminder'
+        };
     }
 
     async createNotification(userId, taskId, type, message) {
         try {
+            console.log('Creating notification:', { userId, taskId, type, message });
+            
             const [result] = await pool.query(
-                'INSERT INTO notifications (user_id, task_id, type, message) VALUES (?, ?, ?, ?)',
+                'INSERT INTO notifications (user_id, task_id, type, message, is_read, created_at) VALUES (?, ?, ?, ?, FALSE, CURRENT_TIMESTAMP)',
                 [userId, taskId, type, message]
             );
 
+            console.log('Notification created with ID:', result.insertId);
+
             const [notification] = await pool.query(
-                'SELECT * FROM notifications WHERE id = ?',
+                `SELECT n.*, t.title as task_title, t.status as task_status, t.priority as task_priority 
+                 FROM notifications n 
+                 LEFT JOIN tasks t ON n.task_id = t.id 
+                 WHERE n.id = ?`,
                 [result.insertId]
             );
 
-            // Send real-time notification via WebSocket
-            if (notification[0]) {
-                this.wsServer.sendNotification(userId, notification[0]);
+            if (this.wsServer && notification[0]) {
+                const enrichedNotification = {
+                    ...notification[0],
+                    created_at: new Date(notification[0].created_at).toISOString(),
+                    type_display: this.getNotificationTypeDisplay(notification[0].type)
+                };
+                
+                console.log('Sending notification via WebSocket:', enrichedNotification);
+                this.wsServer.sendNotification(userId, enrichedNotification);
+            } else {
+                console.log('WebSocket server not available or notification not found');
             }
 
             return notification[0];
@@ -29,17 +52,40 @@ class NotificationService {
         }
     }
 
+    getNotificationTypeDisplay(type) {
+        const displays = {
+            TASK_ASSIGNED: 'Task Assignment',
+            TASK_STATUS_CHANGED: 'Status Update',
+            TASK_DUE_DATE_CHANGED: 'Due Date Update',
+            TASK_PRIORITY_CHANGED: 'Priority Update',
+            TASK_COMPLETED: 'Task Completed',
+            TASK_REMINDER: 'Task Reminder'
+        };
+        return displays[type] || type;
+    }
+
     async getUnreadNotifications(userId) {
         try {
+            console.log('Fetching unread notifications for user:', userId);
             const [notifications] = await pool.query(
-                `SELECT n.*, t.title as task_title 
+                `SELECT n.*, t.title as task_title, t.status as task_status, t.priority as task_priority 
                  FROM notifications n 
                  LEFT JOIN tasks t ON n.task_id = t.id 
                  WHERE n.user_id = ? AND n.is_read = FALSE 
                  ORDER BY n.created_at DESC`,
                 [userId]
             );
-            return notifications;
+            
+            console.log('Found notifications:', notifications);
+            
+            const enrichedNotifications = notifications.map(notification => ({
+                ...notification,
+                created_at: new Date(notification.created_at).toISOString(),
+                type_display: this.getNotificationTypeDisplay(notification.type)
+            }));
+
+            console.log('Enriched notifications:', enrichedNotifications);
+            return { notifications: enrichedNotifications };
         } catch (error) {
             console.error('Error getting notifications:', error);
             throw error;
@@ -48,34 +94,41 @@ class NotificationService {
 
     async markAsRead(notificationId, userId) {
         try {
-            await pool.query(
+            const [result] = await pool.query(
                 'UPDATE notifications SET is_read = TRUE WHERE id = ? AND user_id = ?',
                 [notificationId, userId]
             );
+            return result.affectedRows > 0;
         } catch (error) {
             console.error('Error marking notification as read:', error);
             throw error;
         }
     }
 
-    async notifyTaskAssignment(taskId, assignedToId, assignedByUserId) {
-        const message = `You have been assigned a new task`;
-        return this.createNotification(assignedToId, taskId, 'task_assigned', message);
+    async markAllAsRead(userId) {
+        try {
+            const [result] = await pool.query(
+                'UPDATE notifications SET is_read = TRUE WHERE user_id = ? AND is_read = FALSE',
+                [userId]
+            );
+            return result.affectedRows;
+        } catch (error) {
+            console.error('Error marking all notifications as read:', error);
+            throw error;
+        }
     }
 
-    async notifyTaskUpdate(taskId, userId, updateType) {
-        const message = `Task has been ${updateType}`;
-        return this.createNotification(userId, taskId, 'task_updated', message);
-    }
-
-    async notifyDueSoon(taskId, userId) {
-        const message = `Task is due soon`;
-        return this.createNotification(userId, taskId, 'due_soon', message);
-    }
-
-    async notifyReminder(taskId, userId) {
-        const message = `Reminder for your task`;
-        return this.createNotification(userId, taskId, 'reminder', message);
+    async deleteOldNotifications(daysOld = 30) {
+        try {
+            const [result] = await pool.query(
+                'DELETE FROM notifications WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)',
+                [daysOld]
+            );
+            return result.affectedRows;
+        } catch (error) {
+            console.error('Error deleting old notifications:', error);
+            throw error;
+        }
     }
 }
 

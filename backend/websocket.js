@@ -1,94 +1,133 @@
 const WebSocket = require('ws');
 const jwt = require('jsonwebtoken');
-const url = require('url');
 const cookie = require('cookie');
 
-function setupWebSocketServer(server) {
-  const wss = new WebSocket.Server({ server });
-  console.log('WebSocket server created');
+class WebSocketServer {
+    constructor(server) {
+        this.wss = new WebSocket.Server({ 
+            server,
+            verifyClient: (info, cb) => {
+                console.log('Verifying WebSocket connection...');
+                console.log('Headers:', info.req.headers);
+                
+                try {
+                    const cookies = cookie.parse(info.req.headers.cookie || '');
+                    const token = cookies.token;
 
-  // Store client connections with their user IDs
-  const clients = new Map();
+                    if (!token) {
+                        console.log('No token found in cookies');
+                        cb(false, 401, 'Unauthorized');
+                        return;
+                    }
 
-  wss.on('connection', (ws, req) => {
-    console.log('New WebSocket connection attempt');
-    
-    try {
-      // Get token from cookies
-      const cookies = cookie.parse(req.headers.cookie || '');
-      const token = cookies.token;
+                    // Verify token
+                    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                    console.log('Token verified for user:', decoded.id);
+                    info.req.userId = decoded.id;
+                    cb(true);
+                } catch (error) {
+                    console.error('WebSocket verification error:', error);
+                    cb(false, 401, 'Unauthorized');
+                }
+            }
+        });
+        
+        this.clients = new Map(); // userId -> Set of WebSocket connections
+        console.log('WebSocket server initialized');
+        this.setupConnectionHandler();
+    }
 
-      if (!token) {
-        console.log('No token provided, closing connection');
-        ws.close();
-        return;
-      }
+    setupConnectionHandler() {
+        this.wss.on('connection', (ws, req) => {
+            console.log('New WebSocket connection established');
+            const userId = req.userId; // Set during verifyClient
 
-      console.log('Attempting to verify token:', token.substring(0, 20) + '...');
+            // Store the connection
+            if (!this.clients.has(userId)) {
+                this.clients.set(userId, new Set());
+            }
+            this.clients.get(userId).add(ws);
 
-      // Verify token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const userId = decoded.id;
-      console.log('User authenticated:', userId);
+            console.log(`Client connected. Total clients for user ${userId}: ${this.clients.get(userId).size}`);
 
-      // Store the connection
-      if (!clients.has(userId)) {
-        clients.set(userId, new Set());
-      }
-      clients.get(userId).add(ws);
+            // Setup ping-pong
+            ws.isAlive = true;
+            ws.on('pong', () => {
+                ws.isAlive = true;
+            });
 
-      console.log(`Client connected. Total clients for user ${userId}: ${clients.get(userId).size}`);
+            // Handle client disconnection
+            ws.on('close', () => {
+                console.log(`Client disconnected for user ${userId}`);
+                this.clients.get(userId).delete(ws);
+                if (this.clients.get(userId).size === 0) {
+                    this.clients.delete(userId);
+                }
+            });
 
-      // Handle client disconnection
-      ws.on('close', () => {
-        console.log(`Client disconnected for user ${userId}`);
-        clients.get(userId).delete(ws);
-        if (clients.get(userId).size === 0) {
-          clients.delete(userId);
+            // Handle errors
+            ws.on('error', (error) => {
+                console.error('WebSocket error:', error);
+                ws.close();
+            });
+        });
+
+        // Setup ping interval to keep connections alive
+        this.setupPingInterval();
+    }
+
+    setupPingInterval() {
+        const interval = setInterval(() => {
+            this.wss.clients.forEach((ws) => {
+                if (ws.isAlive === false) {
+                    console.log('Terminating inactive connection');
+                    return ws.terminate();
+                }
+                
+                ws.isAlive = false;
+                ws.ping();
+            });
+        }, 30000);
+
+        this.wss.on('close', () => {
+            clearInterval(interval);
+        });
+    }
+
+    sendNotification(userId, notification) {
+        try {
+            if (!this.clients.has(userId)) {
+                console.log(`No active connections for user ${userId}`);
+                return;
+            }
+
+            console.log(`Sending notification to user ${userId}:`, notification);
+            const userConnections = this.clients.get(userId);
+            const message = JSON.stringify({
+                type: 'notification',
+                data: notification
+            });
+
+            userConnections.forEach(ws => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    console.log('Sending WebSocket message:', message);
+                    ws.send(message);
+                } else {
+                    console.log('WebSocket not in OPEN state:', ws.readyState);
+                }
+            });
+        } catch (error) {
+            console.error('Error sending notification:', error);
         }
-      });
-
-      // Handle errors
-      ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
-      });
-
-    } catch (error) {
-      console.error('Error in WebSocket connection:', error);
-      if (error.name === 'JsonWebTokenError') {
-        console.error('Invalid token provided');
-      }
-      ws.close();
-    }
-  });
-
-  // Function to send notification to a specific user
-  const sendNotification = (userId, notification) => {
-    console.log(`Attempting to send notification to user ${userId}:`, notification);
-    
-    const userClients = clients.get(userId);
-    if (!userClients) {
-      console.log(`No active connections for user ${userId}`);
-      return;
     }
 
-    const message = JSON.stringify({
-      type: 'NOTIFICATION',
-      notification
-    });
-
-    userClients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        console.log('Sending notification to client');
-        client.send(message);
-      }
-    });
-  };
-
-  return {
-    sendNotification,
-    getConnectedClients: () => clients
-  };
+    broadcastToAll(message) {
+        this.wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify(message));
+            }
+        });
+    }
 }
 
-module.exports = setupWebSocketServer;
+module.exports = WebSocketServer;

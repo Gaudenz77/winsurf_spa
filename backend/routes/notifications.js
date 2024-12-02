@@ -27,4 +27,15 @@ router.put('/:id/read', async (req, res) => {
     }
 });
 
+// Mark all notifications as read
+router.put('/read-all', async (req, res) => {
+    try {
+        await req.app.notificationService.markAllAsRead(req.user.userId);
+        res.json({ message: 'All notifications marked as read' });
+    } catch (error) {
+        console.error('Mark all notifications error:', error);
+        res.status(500).json({ message: 'Error marking all notifications as read' });
+    }
+});
+
 module.exports = router;

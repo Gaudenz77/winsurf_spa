@@ -70,7 +70,7 @@
                 </div>
               </div>
             </div>
-            <h1 class="text-4xl font-bold">Welcome, {{ username }}!</h1>
+            <h1 class="text-4xl font-bold">Welcome, {{ currentUser.username }}!</h1>
           </div>
           <p class="text-lg mb-8">Manage your tasks efficiently with our task management system.</p>
           
@@ -103,31 +103,34 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useAuthStore } from './stores/auth'
+import { API_URL } from './config'
 import TaskManager from './components/TaskManager.vue'
 import Welcome from './components/Welcome.vue'
 import Auth from './components/Auth.vue'
 import UserSettings from './components/UserSettings.vue'
 import NotificationBell from './components/NotificationBell.vue'
-import { authService } from './services/authService'
-import { sessionService } from './services/sessionService'
 
-const theme = ref('light')
-const themes = ['light', 'dark', 'cyberpunk', 'cupcake', 'dracula', 'cmyk', 'autumn', 'business', 'acid', 'lemonade', 'night', 'coffee', 'winter', 'pastel', 'fantasy', 'wireframe', 'black', 'luxury', 'dracula', 'lofi', 'nord']
+const authStore = useAuthStore()
 const showAuth = ref(false)
 const showSettings = ref(false)
-const isAuthenticated = ref(false)
-const currentUser = ref(null)
+const theme = ref('light')
+const themes = ['light', 'dark', 'cupcake', 'cyberpunk', 'synthwave']
 
 // Computed properties
-const username = computed(() => currentUser.value?.username || '')
+const isAuthenticated = computed(() => authStore.isAuthenticated)
+const currentUser = computed(() => authStore.user)
 const userInitials = computed(() => {
-  if (!username.value) return '?'
-  return username.value.charAt(0).toUpperCase()
+  if (!currentUser.value?.username) return '?'
+  return currentUser.value.username
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .toUpperCase()
 })
 const profileImageUrl = computed(() => {
   if (!currentUser.value?.profile_image) return null
-  // Ensure we have the correct path
-  return `http://localhost:3000/${currentUser.value.profile_image}`
+  return `${API_URL}/${currentUser.value.profile_image}`
 })
 
 // Theme management
@@ -138,17 +141,14 @@ const setTheme = (newTheme) => {
 
 // Auth handlers
 const handleAuthSuccess = async (userData) => {
-  currentUser.value = userData.user
-  isAuthenticated.value = true
   showAuth.value = false
+  await authStore.checkAuth() // Refresh auth state after login
 }
 
 const logout = async () => {
   try {
-    await authService.logout()
-    currentUser.value = null
-    isAuthenticated.value = false
-    sessionService.clearSession()
+    await authStore.logout()
+    showAuth.value = true
   } catch (error) {
     console.error('Logout error:', error)
   }
@@ -156,22 +156,22 @@ const logout = async () => {
 
 // Methods
 const handleUserUpdate = (updatedUser) => {
-  currentUser.value = updatedUser
+  authStore.$patch({ user: updatedUser })
   showSettings.value = false
 }
 
 // Initialize on mount
 onMounted(async () => {
   try {
-    // Check authentication
-    const user = await authService.getCurrentUser()
-    if (user) {
-      currentUser.value = user
-      isAuthenticated.value = true
+    console.log('Checking authentication status...')
+    await authStore.checkAuth()
+    console.log('Auth check complete. IsAuthenticated:', authStore.isAuthenticated)
+    if (!authStore.isAuthenticated) {
+      showAuth.value = true
     }
   } catch (error) {
     console.error('Error checking authentication:', error)
-    isAuthenticated.value = false
+    showAuth.value = true
   }
 
   // Load theme

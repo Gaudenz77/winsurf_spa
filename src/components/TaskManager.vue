@@ -238,11 +238,29 @@
         </div>
       </div>
     </div>
+        <!-- Notification Testing Panel -->
+        <div class="mt-4 p-4 bg-base-200 rounded-lg">
+      <h3 class="text-lg font-bold mb-2">Notification Testing Panel</h3>
+      <div class="flex flex-wrap gap-2">
+        <button @click="testAssignTask" class="btn btn-sm btn-primary">
+          Test Assign Task
+        </button>
+        <button @click="testUpdateStatus" class="btn btn-sm btn-info">
+          Test Status Change
+        </button>
+        <button @click="testUpdateDueDate" class="btn btn-sm btn-warning">
+          Test Due Date Change
+        </button>
+        <button @click="testUpdatePriority" class="btn btn-sm btn-secondary">
+          Test Priority Change
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { taskService } from '../services/taskService'
 import { categoryService } from '../services/categoryService'
 import { userService } from '../services/userService'
@@ -440,9 +458,9 @@ const getCategoryName = (categoryId) => {
 }
 
 const getAssignedUserName = (userId) => {
-  if (!users.value || !userId) return ''
+  if (!userId || !users.value) return 'Unassigned'
   const user = users.value.find(u => u.id === userId)
-  return user ? user.username : ''
+  return user ? user.username : 'Unknown'
 }
 
 const formatDate = (dateString) => {
@@ -484,4 +502,99 @@ const clearForm = () => {
     reminder_date: ''
   }
 }
+
+// Test functions
+const testAssignTask = async () => {
+  try {
+    // Get current user first
+    const currentUser = await userService.getCurrentUser();
+    if (!currentUser) {
+      console.error('Could not get current user');
+      return;
+    }
+
+    // Get a user to assign to (other than current user)
+    const otherUsers = users.value.filter(u => u.id !== currentUser.id);
+    if (otherUsers.length === 0) {
+      console.error('No other users available for testing');
+      return;
+    }
+
+    const taskData = {
+      title: `Test Task ${Date.now()}`,
+      description: 'This is a test task for notification',
+      priority: 'medium',
+      status: 'pending',
+      category_id: categories.value[0]?.id || null,
+      due_date: new Date(Date.now() + 86400000).toISOString(), // Tomorrow
+      assigned_to: otherUsers[0].id,
+      reminder_date: null
+    };
+    
+    await taskService.createTask(taskData);
+    await loadTasks();
+  } catch (error) {
+    console.error('Test assign task error:', error);
+  }
+};
+
+const testUpdateStatus = async () => {
+  try {
+    if (tasks.value.length > 0) {
+      const task = tasks.value[0];
+      const newStatus = task.status === 'completed' ? 'in_progress' : 'completed';
+      
+      await taskService.updateTask(task.id, {
+        ...task,
+        status: newStatus
+      });
+      await loadTasks();
+    }
+  } catch (error) {
+    console.error('Test status update error:', error);
+  }
+};
+
+const testUpdateDueDate = async () => {
+  try {
+    if (tasks.value.length > 0) {
+      const task = tasks.value[0];
+      const newDueDate = new Date(Date.now() + 172800000); // 2 days from now
+      
+      await taskService.updateTask(task.id, {
+        ...task,
+        due_date: newDueDate.toISOString()
+      });
+      await loadTasks();
+    }
+  } catch (error) {
+    console.error('Test due date update error:', error);
+  }
+};
+
+const testUpdatePriority = async () => {
+  try {
+    if (tasks.value.length > 0) {
+      const task = tasks.value[0];
+      const priorities = ['low', 'medium', 'high'];
+      const currentIndex = priorities.indexOf(task.priority);
+      const newPriority = priorities[(currentIndex + 1) % priorities.length];
+      
+      await taskService.updateTask(task.id, {
+        ...task,
+        priority: newPriority
+      });
+      await loadTasks();
+    }
+  } catch (error) {
+    console.error('Test priority update error:', error);
+  }
+};
+
+// Add watcher for tasks updates
+watch(tasks, (newTasks) => {
+  if (newTasks.length > 0) {
+    console.log('Tasks updated:', newTasks[0]);
+  }
+}, { deep: true });
 </script>

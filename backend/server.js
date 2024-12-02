@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const http = require('http');
 const authRoutes = require('./routes/auth');
 const taskRoutes = require('./routes/tasks');
 const profileRoutes = require('./routes/profile');
@@ -13,6 +14,9 @@ const WebSocketServer = require('./websocket');
 const NotificationService = require('./services/notificationService');
 
 const app = express();
+
+// Create HTTP server
+const server = http.createServer(app);
 
 // Middleware
 app.use(cors({
@@ -26,14 +30,23 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
+// Initialize WebSocket server and notification service
+const wsServer = new WebSocketServer(server);
+const notificationService = new NotificationService(wsServer);
+
+// Make notification service available to routes
+app.set('notificationService', notificationService);
+
 // Debug middleware to log all requests
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.path}`);
-  console.log('Headers:', req.headers);
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Headers:', req.headers);
+  }
   next();
 });
 
-// Serve static files - Fix path to serve directly from public directory
+// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Routes
@@ -51,10 +64,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log('WebSocket server is ready for connections');
 });
-
-// Initialize WebSocket server
-const wsServer = new WebSocketServer(server);
-app.notificationService = new NotificationService(wsServer);

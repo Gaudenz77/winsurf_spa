@@ -1,7 +1,8 @@
 import axios from 'axios'
-import { API_URL } from '../config'
 
-const notificationService = {
+const API_URL = 'http://localhost:3000'
+
+class NotificationService {
   async getUnreadNotifications() {
     try {
       const response = await axios.get(`${API_URL}/api/notifications/unread`, {
@@ -12,7 +13,7 @@ const notificationService = {
       console.error('Error fetching unread notifications:', error)
       throw error
     }
-  },
+  }
 
   async markAsRead(notificationId) {
     try {
@@ -24,7 +25,7 @@ const notificationService = {
       console.error('Error marking notification as read:', error)
       throw error
     }
-  },
+  }
 
   async markAllAsRead() {
     try {
@@ -37,6 +38,18 @@ const notificationService = {
       throw error
     }
   }
+
+  async deleteNotification(notificationId) {
+    try {
+      const response = await axios.delete(`${API_URL}/api/notifications/${notificationId}`, {
+        withCredentials: true
+      })
+      return response.data
+    } catch (error) {
+      console.error('Error deleting notification:', error)
+      throw error
+    }
+  }
 }
 
-export default notificationService
+export default new NotificationService()
