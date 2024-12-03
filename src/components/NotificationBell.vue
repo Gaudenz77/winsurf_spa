@@ -149,8 +149,16 @@ const connectWebSocket = () => {
         console.log('WebSocket message received:', data);
         
         if (data.type === 'notification') {
-          notifications.value.unshift(data.data);
-          updateUnreadCount();
+          // Ensure new notification is marked as unread
+          const newNotification = {
+            ...data.data,
+            is_read: false // Explicitly set as unread
+          };
+          notifications.value.unshift(newNotification);
+          
+          // Force update the unread count
+          unreadCount.value = notifications.value.length;
+          console.log('New notification received, updated count:', unreadCount.value);
         }
       } catch (error) {
         console.error('Error processing WebSocket message:', error);
