@@ -1,9 +1,146 @@
 <template>
-  <div class="bg-base-200 rounded-lg shadow-lg">
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- Task Form -->
-      <div class="p-4 lg:border-r lg:border-base-300">
-        <form @submit.prevent="addTask" class="sticky top-4">
+  <div class="bg-base-200 rounded-lg shadow-lg p-4">
+    <!-- Create Task Button -->
+    <div class="mb-4">
+      <button class="btn btn-primary" @click="showModal = true">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        Create Task
+      </button>
+    </div>
+
+    <!-- Task Table -->
+    <div class="overflow-x-auto">
+      <table class="table w-full">
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Description</th>
+            <th>Category</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Due Date</th>
+            <th>Assigned To</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="task in tasks" :key="task.id" :class="{
+            'opacity-50': task.status === 'completed',
+            'bg-warning bg-opacity-10': task.status === 'in_progress',
+            'bg-error bg-opacity-10': isOverdue(task)
+          }">
+            <td class="max-w-[200px]">
+              <input 
+                v-if="editingTask?.id === task.id"
+                v-model="editingTask.title"
+                class="input input-bordered input-sm w-full"
+              />
+              <span v-else>{{ task.title }}</span>
+            </td>
+            <td class="max-w-[300px]">
+              <textarea 
+                v-if="editingTask?.id === task.id"
+                v-model="editingTask.description"
+                class="textarea textarea-bordered textarea-sm w-full"
+              ></textarea>
+              <span v-else>{{ task.description }}</span>
+            </td>
+            <td>
+              <select 
+                v-if="editingTask?.id === task.id"
+                v-model="editingTask.category_id"
+                class="select select-bordered select-sm w-full"
+              >
+                <option v-for="category in categories" :key="category.id" :value="category.id">
+                  {{ category.name }}
+                </option>
+              </select>
+              <span v-else>{{ getCategoryName(task.category_id) }}</span>
+            </td>
+            <td>
+              <select 
+                v-if="editingTask?.id === task.id"
+                v-model="editingTask.priority"
+                class="select select-bordered select-sm w-full"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+              <span v-else class="badge" :class="{
+                'badge-success': task.priority === 'low',
+                'badge-info': task.priority === 'medium',
+                'badge-warning': task.priority === 'high',
+                'badge-error': task.priority === 'urgent'
+              }">{{ task.priority }}</span>
+            </td>
+            <td>
+              <select 
+                v-if="editingTask?.id === task.id"
+                v-model="editingTask.status"
+                class="select select-bordered select-sm w-full"
+              >
+                <option value="pending">Pending</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="archived">Archived</option>
+              </select>
+              <span v-else class="badge" :class="{
+                'badge-ghost': task.status === 'pending',
+                'badge-warning': task.status === 'in_progress',
+                'badge-success': task.status === 'completed',
+                'badge-neutral': task.status === 'archived'
+              }">{{ task.status }}</span>
+            </td>
+            <td>
+              <input 
+                v-if="editingTask?.id === task.id"
+                type="datetime-local"
+                v-model="editingTask.due_date"
+                class="input input-bordered input-sm w-full"
+              />
+              <span v-else>{{ formatDate(task.due_date) }}</span>
+            </td>
+            <td>
+              <select 
+                v-if="editingTask?.id === task.id"
+                v-model="editingTask.assigned_to"
+                class="select select-bordered select-sm w-full"
+              >
+                <option value="">Unassigned</option>
+                <option v-for="user in users" :key="user.id" :value="user.id">
+                  {{ user.username }}
+                </option>
+              </select>
+              <span v-else>{{ getAssignedUserName(task.assigned_to) }}</span>
+            </td>
+            <td class="space-x-2">
+              <template v-if="editingTask?.id === task.id">
+                <div class="flex flex-col align-middle justify-center space-y-2">
+                  <button @click="saveEdit" class="btn btn-success btn-sm">Save</button>
+                  <button @click="cancelEdit" class="btn btn-ghost btn-sm">Cancel</button>
+                </div>
+              </template>
+              <template v-else>
+                <div class="flex flex-col align-middle justify-center space-y-2">
+                  <button @click="startEdit(task)" class="btn btn-info btn-sm">Edit</button>
+                  <button @click="deleteTask(task.id)" class="btn btn-error btn-sm">Delete</button>
+                </div>
+              </template>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Create Task Modal -->
+    <dialog class="modal" :class="{ 'modal-open': showModal }">
+      <div class="modal-box">
+        <h3 class="font-bold text-lg mb-4">Create New Task</h3>
+        <form @submit.prevent="addTask">
           <div class="form-control">
             <label class="label">
               <span class="label-text">Task Title</span>
@@ -100,160 +237,25 @@
             />
           </div>
 
-          <button type="submit" class="btn btn-primary mt-4 w-full">Add Task</button>
+          <div class="modal-action">
+            <button type="submit" class="btn btn-primary">Create Task</button>
+            <button type="button" class="btn" @click="closeModal">Cancel</button>
+          </div>
         </form>
       </div>
+      <form method="dialog" class="modal-backdrop">
+        <button @click="closeModal">close</button>
+      </form>
+    </dialog>
 
-      <!-- Tasks Table -->
-      <div class="lg:col-span-2 p-4">
-        <div class="overflow-x-auto">
-          <table class="table w-full">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Description</th>
-                <th>Category</th>
-                <th>Due Date</th>
-                <th>Priority</th>
-                <th>Status</th>
-                <th>Assigned To</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="task in tasks" :key="task.id" :class="{
-                'opacity-50': task.status === 'completed',
-                'bg-warning bg-opacity-10': task.status === 'in_progress',
-                'bg-error bg-opacity-10': isOverdue(task)
-              }">
-                <td class="max-w-[200px]">
-                  <input 
-                    v-if="editingTask?.id === task.id"
-                    v-model="editingTask.title"
-                    class="input input-bordered input-sm w-full"
-                  />
-                  <span v-else class="block truncate">{{ task.title }}</span>
-                </td>
-                <td class="max-w-[300px]">
-                  <textarea 
-                    v-if="editingTask?.id === task.id"
-                    v-model="editingTask.description"
-                    class="textarea textarea-bordered textarea-sm w-full"
-                  ></textarea>
-                  <span v-else class="block truncate">{{ task.description }}</span>
-                </td>
-                <td>
-                  <select 
-                    v-if="editingTask?.id === task.id"
-                    v-model="editingTask.category_id"
-                    class="select select-bordered select-sm w-full"
-                  >
-                    <option value="">Select Category</option>
-                    <template v-if="categories">
-                      <option v-for="category in categories" :key="category.id" :value="category.id">
-                        {{ category.name }}
-                      </option>
-                    </template>
-                  </select>
-                  <span v-else>{{ getCategoryName(task.category_id) }}</span>
-                </td>
-                <td>
-                  <input 
-                    v-if="editingTask?.id === task.id"
-                    type="datetime-local"
-                    v-model="editingTask.due_date"
-                    class="input input-bordered input-sm w-full"
-                  />
-                  <span v-else>{{ formatDate(task.due_date) }}</span>
-                </td>
-                <td>
-                  <select 
-                    v-if="editingTask?.id === task.id"
-                    v-model="editingTask.priority"
-                    class="select select-bordered select-sm w-full"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                    <option value="urgent">Urgent</option>
-                  </select>
-                  <span v-else :class="{
-                    'badge badge-success': task.priority === 'low',
-                    'badge badge-warning': task.priority === 'medium',
-                    'badge badge-error': task.priority === 'high',
-                    'badge badge-error animate-pulse': task.priority === 'urgent'
-                  }">{{ task.priority }}</span>
-                </td>
-                <td>
-                  <select 
-                    v-if="editingTask?.id === task.id"
-                    v-model="editingTask.status"
-                    class="select select-bordered select-sm w-full"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="archived">Archived</option>
-                  </select>
-                  <span v-else :class="{
-                    'badge': true,
-                    'badge-ghost': task.status === 'pending',
-                    'badge-warning': task.status === 'in_progress',
-                    'badge-success': task.status === 'completed',
-                    'badge-neutral': task.status === 'archived'
-                  }">{{ task.status }}</span>
-                </td>
-                <td>
-                  <select 
-                    v-if="editingTask?.id === task.id"
-                    v-model="editingTask.assigned_to"
-                    class="select select-bordered select-sm w-full"
-                  >
-                    <option value="">Select User</option>
-                    <template v-if="users">
-                      <option v-for="user in users" :key="user.id" :value="user.id">
-                        {{ user.username }}
-                      </option>
-                    </template>
-                  </select>
-                  <span v-else>{{ getAssignedUserName(task.assigned_to) }}</span>
-                </td>
-                <td class="space-x-2">
-                  <template v-if="editingTask?.id === task.id">
-                    <div class="flex flex-col align-middle justify-center space-y-2">
-                      <button @click="saveEdit" class="btn btn-success btn-sm">Save</button>
-                      <button @click="cancelEdit" class="btn btn-ghost btn-sm">Cancel</button>
-                    </div>
-                  </template>
-                  <template v-else>
-                    <div class="flex flex-col align-middle justify-center space-y-2">
-                      <button @click="startEdit(task)" class="btn btn-info btn-sm">Edit</button>
-                      <button @click="deleteTask(task.id)" class="btn btn-error btn-sm">Delete</button>
-                    </div>
-                  </template>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-        <!-- Notification Testing Panel -->
-        <div class="mt-4 p-4 bg-base-200 rounded-lg">
+    <!-- Notification Testing Panel -->
+    <div class="mt-4 p-4 bg-base-200 rounded-lg">
       <h3 class="text-lg font-bold mb-2">Notification Testing Panel</h3>
       <div class="flex flex-wrap gap-2">
-        <button @click="testAssignTask" class="btn btn-sm btn-primary">
-          Test Assign Task
-        </button>
-        <button @click="testUpdateStatus" class="btn btn-sm btn-info">
-          Test Status Change
-        </button>
-        <button @click="testUpdateDueDate" class="btn btn-sm btn-warning">
-          Test Due Date Change
-        </button>
-        <button @click="testUpdatePriority" class="btn btn-sm btn-secondary">
-          Test Priority Change
-        </button>
+        <button @click="testAssignTask" class="btn btn-sm">Test Assign</button>
+        <button @click="testUpdateStatus" class="btn btn-sm">Test Status Update</button>
+        <button @click="testUpdateDueDate" class="btn btn-sm">Test Due Date Update</button>
+        <button @click="testUpdatePriority" class="btn btn-sm">Test Priority Update</button>
       </div>
     </div>
   </div>
@@ -264,19 +266,21 @@ import { ref, onMounted, watch } from 'vue'
 import { taskService } from '../services/taskService'
 import { categoryService } from '../services/categoryService'
 import { userService } from '../services/userService'
+import { useAuthStore } from '../stores/auth'
 
-// Initialize refs with empty arrays
+const authStore = useAuthStore()
 const tasks = ref([])
 const categories = ref([])
 const users = ref([])
 const editingTask = ref(null)
+const showModal = ref(false)
 
 const newTask = ref({
   title: '',
   description: '',
+  category_id: '',
   priority: 'medium',
   status: 'pending',
-  category_id: '',
   due_date: '',
   assigned_to: '',
   reminder_date: ''
@@ -284,28 +288,27 @@ const newTask = ref({
 
 // Load initial data
 onMounted(async () => {
-  try {
-    console.log('Starting to load initial data...')
-    // Load data sequentially to ensure categories and users are available
-    const loadedCategories = await categoryService.getCategories()
-    console.log('Loaded categories:', loadedCategories)
-    categories.value = loadedCategories || []
-
-    const loadedUsers = await userService.getUsers()
-    console.log('Loaded users:', loadedUsers)
-    users.value = loadedUsers || []
-
-    const loadedTasks = await taskService.getTasks()
-    console.log('Loaded tasks:', loadedTasks)
-    tasks.value = loadedTasks || []
-  } catch (error) {
-    console.error('Error loading initial data:', error.response?.data || error)
-    // Ensure refs are initialized even if there's an error
-    categories.value = categories.value || []
-    users.value = users.value || []
-    tasks.value = tasks.value || []
-  }
+  await loadTasks()
+  await loadCategories()
+  await loadUsers()
 })
+
+// Function to close modal and reset form
+const closeModal = () => {
+  showModal.value = false
+  clearForm()
+}
+
+// Modified addTask function
+const addTask = async () => {
+  try {
+    await taskService.createTask(newTask.value)
+    await loadTasks()
+    closeModal()
+  } catch (error) {
+    console.error('Error creating task:', error)
+  }
+}
 
 // Load tasks from API
 const loadTasks = async () => {
@@ -351,38 +354,6 @@ const loadUsers = async () => {
   } catch (error) {
     console.error('Error loading users:', error.response?.data || error)
     users.value = []
-  }
-}
-
-// Add new task
-const addTask = async () => {
-  try {
-    console.log('Original task data:', newTask.value);
-    const taskToCreate = {
-      ...newTask.value,
-      due_date: newTask.value.due_date ? new Date(new Date(newTask.value.due_date).getTime() + (60 * 60 * 1000)).toISOString() : null,
-      reminder_date: newTask.value.reminder_date ? new Date(new Date(newTask.value.reminder_date).getTime() + (60 * 60 * 1000)).toISOString() : null,
-      status: newTask.value.status || 'pending',
-      priority: newTask.value.priority || 'medium'
-    };
-
-    console.log('Creating task with data:', taskToCreate);
-    const createdTask = await taskService.createTask(taskToCreate);
-    console.log('Task created successfully:', createdTask);
-    tasks.value.unshift(createdTask);
-    
-    // Reset form
-    newTask.value = {
-      title: '',
-      description: '',
-      priority: 'medium',
-      status: 'pending',
-      due_date: '',
-      reminder_date: '',
-      assigned_to: ''
-    };
-  } catch (error) {
-    console.error('Error creating task:', error.response?.data || error);
   }
 }
 

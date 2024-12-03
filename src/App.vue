@@ -115,7 +115,7 @@ const authStore = useAuthStore()
 const showAuth = ref(false)
 const showSettings = ref(false)
 const theme = ref('light')
-const themes = ['light', 'dark', 'cupcake', 'cyberpunk', 'synthwave']
+const themes = ["light", "dark", "cyberpunk", "cupcake", "dracula", "acid", "coffee", "synthwave", "retro", "garden", "forest", "aqua", "lofi", "pastel", "fantasy", "wireframe", "black", "luxury", "dracula", "lofi", "nord"]
 
 // Computed properties
 const isAuthenticated = computed(() => authStore.isAuthenticated)
