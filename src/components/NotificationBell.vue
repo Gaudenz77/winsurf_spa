@@ -68,14 +68,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import notificationService from '../services/notificationService'
 import { API_URL } from '../config'
 
 const authStore = useAuthStore()
 const notifications = ref([])
-const unreadCount = ref(0)
+const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).length)
 const loading = ref(false)
 const error = ref(null)
 let ws = null
@@ -116,7 +116,6 @@ const loadNotifications = async () => {
     
     if (data && data.notifications) {
       notifications.value = data.notifications;
-      updateUnreadCount();
     }
   } catch (err) {
     console.error('Error loading notifications:', err);
@@ -149,16 +148,13 @@ const connectWebSocket = () => {
         console.log('WebSocket message received:', data);
         
         if (data.type === 'notification') {
-          // Ensure new notification is marked as unread
+          // Add new notification and force reactivity
           const newNotification = {
             ...data.data,
-            is_read: false // Explicitly set as unread
+            is_read: false
           };
-          notifications.value.unshift(newNotification);
-          
-          // Force update the unread count
-          unreadCount.value = notifications.value.length;
-          console.log('New notification received, updated count:', unreadCount.value);
+          notifications.value = [newNotification, ...notifications.value];
+          console.log('New notification added, total count:', notifications.value.length);
         }
       } catch (error) {
         console.error('Error processing WebSocket message:', error);
@@ -204,7 +200,6 @@ const markAsRead = async (notificationId) => {
     const notification = notifications.value.find(n => n.id === notificationId)
     if (notification) {
       notification.is_read = true
-      updateUnreadCount()
     }
   } catch (err) {
     console.error('Error marking notification as read:', err)
@@ -218,7 +213,6 @@ const markAllAsRead = async () => {
     notifications.value.forEach(notification => {
       notification.is_read = true
     })
-    updateUnreadCount()
   } catch (err) {
     console.error('Error marking all notifications as read:', err)
     error.value = 'Failed to mark all notifications as read'
@@ -240,11 +234,6 @@ const getNotificationBadgeClass = (type) => {
 const formatDate = (date) => {
   if (!date) return ''
   return new Date(date).toLocaleString()
-}
-
-const updateUnreadCount = () => {
-  unreadCount.value = notifications.value.filter(n => !n.is_read).length
-  console.log('Updated unread count:', unreadCount.value)
 }
 
 onMounted(() => {
