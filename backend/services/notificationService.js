@@ -142,7 +142,7 @@ class NotificationService {
 
     async markAsRead(notificationId, userId) {
         try {
-            console.log('NotificationService: Marking notification as read:', { notificationId, userId });
+            console.log('NotificationService: Deleting read notification:', { notificationId, userId });
             
             // Extract numeric ID if userId is an object
             const actualUserId = typeof userId === 'object' ? userId.userId || userId.id : userId;
@@ -155,13 +155,13 @@ class NotificationService {
             console.log('NotificationService: Using user ID:', actualUserId);
 
             const [result] = await pool.query(
-                'UPDATE notifications SET is_read = TRUE WHERE id = ? AND user_id = ?',
+                'DELETE FROM notifications WHERE id = ? AND user_id = ?',
                 [notificationId, actualUserId]
             );
-            console.log('NotificationService: Mark as read result:', result);
+            console.log('NotificationService: Delete notification result:', result);
             return result.affectedRows > 0;
         } catch (error) {
-            console.error('NotificationService: Error marking as read:', error);
+            console.error('NotificationService: Error deleting notification:', error);
             console.error('Stack trace:', error.stack);
             throw error;
         }
