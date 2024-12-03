@@ -68,7 +68,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import notificationService from '../services/notificationService'
 import { API_URL } from '../config'
@@ -79,131 +79,84 @@ const unreadCount = computed(() => notifications.value.filter(n => !n.is_read).l
 const loading = ref(false)
 const error = ref(null)
 let ws = null
-let reconnectAttempts = 0
-let reconnectTimeout = null
-const maxReconnectAttempts = 5
 
-// Watch for authentication state changes
-watch(() => authStore.isAuthenticated, (isAuthenticated) => {
-  console.log('Auth state changed:', isAuthenticated)
-  if (isAuthenticated) {
-    loadNotifications()
+// Load notifications on mount
+onMounted(async () => {
+  console.log('NotificationBell mounted, initializing...')
+  if (authStore.isAuthenticated) {
+    console.log('User is authenticated, connecting WebSocket...')
+    await loadNotifications()
     connectWebSocket()
-  } else {
-    if (ws) {
-      ws.close()
-      ws = null
-    }
-    notifications.value = []
-    unreadCount.value = 0
   }
 })
 
 const loadNotifications = async () => {
   try {
-    console.log('Loading notifications...');
-    loading.value = true;
-    error.value = null;
-    
-    if (!authStore.isAuthenticated) {
-      console.log('User not authenticated, skipping notification load');
-      loading.value = false;
-      return;
-    }
-
-    const data = await notificationService.getUnreadNotifications();
-    console.log('Notifications loaded:', data);
-    
-    if (data && data.notifications) {
-      notifications.value = data.notifications;
-    }
+    console.log('Loading notifications...')
+    loading.value = true
+    const response = await notificationService.getUnreadNotifications()
+    console.log('Notifications loaded:', response)
+    notifications.value = response.notifications || []
   } catch (err) {
-    console.error('Error loading notifications:', err);
-    error.value = 'Failed to load notifications';
-    notifications.value = [];
+    console.error('Error loading notifications:', err)
+    error.value = 'Failed to load notifications'
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 const connectWebSocket = () => {
-  try {
-    console.log('Connecting to WebSocket...');
-    ws = new WebSocket('ws://localhost:3000');
+  console.log('Connecting to WebSocket...')
+  const wsUrl = `ws://localhost:3000`
+  console.log('WebSocket URL:', wsUrl)
+  ws = new WebSocket(wsUrl)
 
-    ws.onopen = () => {
-      console.log('WebSocket connection established');
-      // Send authentication message
-      if (authStore.user && authStore.user.id) {
-        ws.send(JSON.stringify({
-          type: 'auth',
-          userId: authStore.user.id
-        }));
-      }
-    };
+  ws.onopen = () => {
+    console.log('WebSocket connection established')
+  }
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        console.log('WebSocket message received:', data);
-        
-        if (data.type === 'notification') {
-          // Add new notification and force reactivity
-          const newNotification = {
-            ...data.data,
-            is_read: false
-          };
-          notifications.value = [newNotification, ...notifications.value];
-          console.log('New notification added, total count:', notifications.value.length);
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      console.log('WebSocket message received:', data)
+      
+      if (data.type === 'notification') {
+        console.log('Processing notification:', data.data)
+        // Create new notification and update the array
+        const newNotification = {
+          ...data.data,
+          is_read: false
         }
-      } catch (error) {
-        console.error('Error processing WebSocket message:', error);
+        
+        // Create a new array to ensure reactivity
+        notifications.value = [newNotification, ...notifications.value]
+        console.log('Updated notifications array:', notifications.value)
+        console.log('New unread count:', unreadCount.value)
       }
-    };
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error);
-      reconnectWebSocket();
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket connection closed');
-      reconnectWebSocket();
-    };
-  } catch (error) {
-    console.error('Error establishing WebSocket connection:', error);
-    reconnectWebSocket();
-  }
-};
-
-const reconnectWebSocket = () => {
-  if (reconnectAttempts >= maxReconnectAttempts) {
-    console.log('Max reconnection attempts reached');
-    return;
+    } catch (error) {
+      console.error('Error processing WebSocket message:', error)
+    }
   }
 
-  reconnectAttempts++;
-  console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
-  
-  if (reconnectTimeout) {
-    clearTimeout(reconnectTimeout);
+  ws.onerror = (error) => {
+    console.error('WebSocket error:', error)
   }
 
-  reconnectTimeout = setTimeout(() => {
-    connectWebSocket();
-  }, 2000 * Math.min(reconnectAttempts, 5)); // Exponential backoff, max 10 seconds
-};
+  ws.onclose = (event) => {
+    console.log('WebSocket connection closed:', event.code, event.reason)
+    // Try to reconnect after a delay
+    setTimeout(connectWebSocket, 5000)
+  }
+}
 
 const markAsRead = async (notificationId) => {
   try {
     await notificationService.markAsRead(notificationId)
-    const notification = notifications.value.find(n => n.id === notificationId)
-    if (notification) {
-      notification.is_read = true
-    }
-  } catch (err) {
-    console.error('Error marking notification as read:', err)
-    error.value = 'Failed to mark notification as read'
+    // Remove the notification from the array
+    notifications.value = notifications.value.filter(n => n.id !== notificationId)
+    console.log('Notification marked as read, new count:', unreadCount.value)
+  } catch (error) {
+    console.error('Error marking notification as read:', error)
   }
 }
 
@@ -236,24 +189,11 @@ const formatDate = (date) => {
   return new Date(date).toLocaleString()
 }
 
-onMounted(() => {
-  console.log('NotificationBell mounted, initializing...')
-  if (authStore.isAuthenticated) {
-    console.log('User is authenticated, connecting WebSocket...')
-    loadNotifications()
-    connectWebSocket()
-  } else {
-    console.log('User is not authenticated')
-  }
-})
-
+// Cleanup on unmount
 onBeforeUnmount(() => {
   if (ws) {
     console.log('Closing WebSocket connection...')
     ws.close()
-  }
-  if (reconnectTimeout) {
-    clearTimeout(reconnectTimeout)
   }
 })
 </script>

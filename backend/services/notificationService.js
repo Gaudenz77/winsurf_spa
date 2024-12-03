@@ -55,10 +55,13 @@ class NotificationService {
                     type_display: this.getNotificationTypeDisplay(notification[0].type)
                 };
                 
-                console.log('NotificationService: Sending notification via WebSocket:', enrichedNotification);
+                console.log('NotificationService: Broadcasting notification via WebSocket:', enrichedNotification);
                 this.wsServer.sendNotification(actualUserId, enrichedNotification);
+                console.log('NotificationService: Notification broadcast complete');
             } else {
                 console.log('NotificationService: WebSocket server not available or notification not found');
+                if (!this.wsServer) console.log('WebSocket server is null');
+                if (!notification[0]) console.log('Notification not found');
             }
 
             return notification[0];

@@ -22,8 +22,8 @@ class WebSocketServer {
 
                     // Verify token
                     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-                    console.log('Token verified for user:', decoded.id);
-                    info.req.userId = decoded.id;
+                    console.log('Token verified for user:', decoded.userId);
+                    info.req.userId = decoded.userId;
                     cb(true);
                 } catch (error) {
                     console.error('WebSocket verification error:', error);
@@ -39,8 +39,14 @@ class WebSocketServer {
 
     setupConnectionHandler() {
         this.wss.on('connection', (ws, req) => {
-            console.log('New WebSocket connection established');
-            const userId = req.userId; // Set during verifyClient
+            const userId = req.userId;
+            console.log('New WebSocket connection established for user:', userId);
+
+            if (!userId) {
+                console.error('No user ID found in connection request');
+                ws.close(1008, 'No user ID found');
+                return;
+            }
 
             // Store the connection
             if (!this.clients.has(userId)) {
@@ -59,9 +65,11 @@ class WebSocketServer {
             // Handle client disconnection
             ws.on('close', () => {
                 console.log(`Client disconnected for user ${userId}`);
-                this.clients.get(userId).delete(ws);
-                if (this.clients.get(userId).size === 0) {
-                    this.clients.delete(userId);
+                if (this.clients.has(userId)) {
+                    this.clients.get(userId).delete(ws);
+                    if (this.clients.get(userId).size === 0) {
+                        this.clients.delete(userId);
+                    }
                 }
             });
 
