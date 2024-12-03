@@ -3,6 +3,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const WebSocket = require('ws');
 const pool = require('./config/database');
+const jwt = require('jsonwebtoken'); // Added jwt module
 const app = express();
 
 // Test database connection
@@ -26,12 +27,13 @@ const notificationsRoutes = require('./routes/notifications');
 // Import services
 const NotificationService = require('./services/notificationService');
 
-// Initialize WebSocket server first
+// Initialize WebSocket server
 const wss = new WebSocket.Server({ noServer: true });
+console.log('WebSocket server initialized');
 
-// Create notification service instance and attach to app
+// Initialize notification service with WebSocket server
 const notificationService = new NotificationService(wss);
-app.locals.notificationService = notificationService;
+app.set('notificationService', notificationService); // Make sure service is available on app object
 
 // Middleware
 app.use(cors({
@@ -62,10 +64,10 @@ app.use('/api/categories', categoriesRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/notifications', notificationsRoutes);
 
-// Error handler
+// Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ message: err.message || 'Something broke!' });
+  console.error('Global error handler:', err);
+  res.status(500).json({ message: 'Internal server error', error: err.message });
 });
 
 // Create HTTP server
@@ -74,36 +76,93 @@ const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
+// Track client connections per user
+const clients = new Map();
+
 // Handle WebSocket upgrade
-server.on('upgrade', (request, socket, head) => {
-  wss.handleUpgrade(request, socket, head, (ws) => {
-    wss.emit('connection', ws, request);
-  });
+server.on('upgrade', async (request, socket, head) => {
+  console.log('Verifying WebSocket connection...');
+  
+  try {
+    // Get token from cookie
+    const cookies = cookie.parse(request.headers.cookie || '');
+    const token = cookies.token;
+    
+    if (!token) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
+    // Verify token and get user
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = {
+      userId: decoded.userId,
+      username: decoded.username
+    };
+    
+    console.log('WebSocket connection authenticated for user:', user);
+
+    // Attach user to request for later use
+    request.user = user;
+
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  } catch (error) {
+    console.error('WebSocket authentication error:', error);
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+    socket.destroy();
+  }
 });
 
-// WebSocket connection handling
-wss.on('connection', (ws) => {
-  console.log('WebSocket client connected');
+wss.on('connection', (ws, request) => {
+  const user = request.user;
+  console.log('New WebSocket connection established for user:', user);
+
+  // Initialize user's client set if it doesn't exist
+  if (!clients.has(user.userId)) {
+    clients.set(user.userId, new Set());
+  }
   
+  // Add this connection to user's set
+  clients.get(user.userId).add(ws);
+  
+  console.log(`Client connected. Total clients for user ${user.userId}: ${clients.get(user.userId).size}`);
+
+  // Handle client messages
   ws.on('message', (message) => {
-    console.log('Received:', message);
-  });
-  
-  ws.on('close', () => {
-    console.log('Client disconnected');
-  });
-});
-
-// Add sendNotification method to WebSocket server
-wss.sendNotification = (userId, notification) => {
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN && client.userId === userId) {
-      client.send(JSON.stringify({
-        type: 'notification',
-        notification
-      }));
+    try {
+      const data = JSON.parse(message);
+      console.log('Received message from client:', data);
+      
+      if (data.type === 'auth') {
+        ws.user = user;
+        console.log('Client authenticated:', ws.user);
+      }
+    } catch (error) {
+      console.error('Error processing message:', error);
     }
   });
-};
+
+  // Handle client disconnection
+  ws.on('close', () => {
+    if (user && user.userId) {
+      const userClients = clients.get(user.userId);
+      if (userClients) {
+        userClients.delete(ws);
+        console.log(`Client disconnected. Total clients for user ${user.userId}: ${userClients.size}`);
+        
+        // Clean up if no more clients for this user
+        if (userClients.size === 0) {
+          clients.delete(user.userId);
+        }
+      }
+    }
+  });
+
+  // Send initial authentication request
+  ws.send(JSON.stringify({ type: 'auth_request' }));
+});
 
 module.exports = app;

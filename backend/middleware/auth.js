@@ -15,7 +15,20 @@ const verifyToken = (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log('Token decoded successfully:', decoded);
-    req.user = decoded;
+    
+    // Ensure decoded token has the required structure
+    if (!decoded.id && !decoded.userId) {
+      console.error('Token missing user ID');
+      return res.status(401).json({ message: 'Invalid token structure.' });
+    }
+
+    // Standardize the user object structure
+    req.user = {
+      userId: decoded.id || decoded.userId,
+      username: decoded.username
+    };
+    
+    console.log('User object set:', req.user);
     next();
   } catch (error) {
     console.error('Token verification failed:', error);

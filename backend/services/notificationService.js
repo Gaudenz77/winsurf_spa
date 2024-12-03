@@ -23,9 +23,19 @@ class NotificationService {
                 throw new Error('Missing required parameters');
             }
 
+            // Extract numeric ID if userId is an object
+            const actualUserId = typeof userId === 'object' ? userId.userId || userId.id : userId;
+            
+            if (!actualUserId) {
+                console.error('NotificationService: Could not extract user ID from:', userId);
+                throw new Error('Invalid user ID format');
+            }
+
+            console.log('NotificationService: Using user ID:', actualUserId);
+
             const [result] = await pool.query(
                 'INSERT INTO notifications (user_id, task_id, type, message, is_read, created_at) VALUES (?, ?, ?, ?, FALSE, CURRENT_TIMESTAMP)',
-                [userId, taskId, type, message]
+                [actualUserId, taskId, type, message]
             );
 
             console.log('NotificationService: Notification created with ID:', result.insertId);
@@ -46,7 +56,7 @@ class NotificationService {
                 };
                 
                 console.log('NotificationService: Sending notification via WebSocket:', enrichedNotification);
-                this.wsServer.sendNotification(userId, enrichedNotification);
+                this.wsServer.sendNotification(actualUserId, enrichedNotification);
             } else {
                 console.log('NotificationService: WebSocket server not available or notification not found');
             }
@@ -59,14 +69,24 @@ class NotificationService {
         }
     }
 
-    async getUnreadNotifications(userId) {
+    async getUnreadNotifications(user) {
         try {
-            console.log('NotificationService: Getting unread notifications for user:', userId);
+            console.log('NotificationService.getUnreadNotifications - Input user:', user);
+            
+            if (!user) {
+                console.error('NotificationService.getUnreadNotifications - No user provided');
+                throw new Error('User is required');
+            }
+
+            // Extract numeric ID if user is an object
+            const userId = typeof user === 'object' ? user.userId || user.id : user;
             
             if (!userId) {
-                console.error('NotificationService: No userId provided');
-                throw new Error('User ID is required');
+                console.error('NotificationService.getUnreadNotifications - Could not extract user ID from:', user);
+                throw new Error('Invalid user format - no ID found');
             }
+
+            console.log('NotificationService.getUnreadNotifications - Using user ID:', userId);
 
             // First check if user exists
             const [users] = await pool.query(
@@ -74,32 +94,48 @@ class NotificationService {
                 [userId]
             );
 
+            console.log('NotificationService.getUnreadNotifications - User check result:', users);
+
             if (!users || users.length === 0) {
-                console.error('NotificationService: User not found:', userId);
-                throw new Error('User not found');
+                console.error('NotificationService.getUnreadNotifications - User not found:', userId);
+                throw new Error(`User not found with ID: ${userId}`);
             }
 
+            // Get notifications with task details
             const [notifications] = await pool.query(
-                `SELECT n.*, t.title as task_title, t.status as task_status, t.priority as task_priority 
-                 FROM notifications n 
-                 LEFT JOIN tasks t ON n.task_id = t.id 
-                 WHERE n.user_id = ? AND n.is_read = FALSE 
-                 ORDER BY n.created_at DESC`,
+                `SELECT 
+                    n.*,
+                    t.title as task_title,
+                    t.status as task_status,
+                    t.priority as task_priority,
+                    t.due_date as task_due_date,
+                    t.description as task_description,
+                    u.username as assigned_username
+                FROM notifications n
+                LEFT JOIN tasks t ON n.task_id = t.id
+                LEFT JOIN users u ON t.assigned_to = u.id
+                WHERE n.user_id = ? AND n.is_read = FALSE
+                ORDER BY n.created_at DESC`,
                 [userId]
             );
-            
-            console.log('NotificationService: Found notifications:', notifications.length);
-            
+
+            console.log('NotificationService.getUnreadNotifications - Found notifications:', notifications.length);
+
+            // Enrich notifications with display text
             const enrichedNotifications = notifications.map(notification => ({
                 ...notification,
                 created_at: new Date(notification.created_at).toISOString(),
-                type_display: this.getNotificationTypeDisplay(notification.type)
+                type_display: this.getNotificationTypeDisplay(notification.type),
+                task_due_date: notification.task_due_date ? new Date(notification.task_due_date).toISOString() : null
             }));
+
+            console.log('NotificationService.getUnreadNotifications - Enriched notifications:', 
+                enrichedNotifications.map(n => ({ id: n.id, type: n.type, message: n.message })));
 
             return { notifications: enrichedNotifications };
         } catch (error) {
-            console.error('NotificationService Error:', error);
-            console.error('Stack trace:', error.stack);
+            console.error('NotificationService.getUnreadNotifications - Error:', error);
+            console.error('NotificationService.getUnreadNotifications - Stack:', error.stack);
             throw error;
         }
     }
@@ -107,9 +143,20 @@ class NotificationService {
     async markAsRead(notificationId, userId) {
         try {
             console.log('NotificationService: Marking notification as read:', { notificationId, userId });
+            
+            // Extract numeric ID if userId is an object
+            const actualUserId = typeof userId === 'object' ? userId.userId || userId.id : userId;
+            
+            if (!actualUserId) {
+                console.error('NotificationService: Could not extract user ID from:', userId);
+                throw new Error('Invalid user ID format');
+            }
+
+            console.log('NotificationService: Using user ID:', actualUserId);
+
             const [result] = await pool.query(
                 'UPDATE notifications SET is_read = TRUE WHERE id = ? AND user_id = ?',
-                [notificationId, userId]
+                [notificationId, actualUserId]
             );
             console.log('NotificationService: Mark as read result:', result);
             return result.affectedRows > 0;
@@ -123,9 +170,20 @@ class NotificationService {
     async markAllAsRead(userId) {
         try {
             console.log('NotificationService: Marking all notifications as read for user:', userId);
+            
+            // Extract numeric ID if userId is an object
+            const actualUserId = typeof userId === 'object' ? userId.userId || userId.id : userId;
+            
+            if (!actualUserId) {
+                console.error('NotificationService: Could not extract user ID from:', userId);
+                throw new Error('Invalid user ID format');
+            }
+
+            console.log('NotificationService: Using user ID:', actualUserId);
+
             const [result] = await pool.query(
                 'UPDATE notifications SET is_read = TRUE WHERE user_id = ? AND is_read = FALSE',
-                [userId]
+                [actualUserId]
             );
             console.log('NotificationService: Mark all as read result:', result);
             return result.affectedRows;
@@ -154,12 +212,12 @@ class NotificationService {
 
     getNotificationTypeDisplay(type) {
         const displays = {
-            task_assigned: 'Task Assignment',
-            task_status_changed: 'Status Update',
-            task_due_date_changed: 'Due Date Update',
-            task_priority_changed: 'Priority Update',
-            task_completed: 'Task Completed',
-            task_reminder: 'Task Reminder'
+            'task_assigned': 'Task Assigned',
+            'task_status_changed': 'Status Changed',
+            'task_due_date_changed': 'Due Date Changed',
+            'task_priority_changed': 'Priority Changed',
+            'task_completed': 'Task Completed',
+            'task_reminder': 'Task Reminder'
         };
         return displays[type] || type;
     }

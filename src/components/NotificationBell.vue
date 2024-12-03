@@ -100,123 +100,95 @@ watch(() => authStore.isAuthenticated, (isAuthenticated) => {
 })
 
 const loadNotifications = async () => {
-  if (!authStore.isAuthenticated) {
-    console.log('Not authenticated, skipping notification load')
-    return
-  }
-
   try {
-    loading.value = true
-    error.value = null
-    console.log('Loading notifications...')
-    const response = await notificationService.getUnreadNotifications()
-    console.log('Loaded notifications response:', response)
+    console.log('Loading notifications...');
+    loading.value = true;
+    error.value = null;
     
-    if (Array.isArray(response.notifications)) {
-      notifications.value = response.notifications
-      console.log('Set notifications array:', notifications.value)
-    } else if (Array.isArray(response)) {
-      notifications.value = response
-      console.log('Set notifications directly:', notifications.value)
-    } else {
-      console.error('Unexpected notifications format:', response)
-      notifications.value = []
+    if (!authStore.isAuthenticated) {
+      console.log('User not authenticated, skipping notification load');
+      loading.value = false;
+      return;
     }
+
+    const data = await notificationService.getUnreadNotifications();
+    console.log('Notifications loaded:', data);
     
-    updateUnreadCount()
+    if (data && data.notifications) {
+      notifications.value = data.notifications;
+      updateUnreadCount();
+    }
   } catch (err) {
-    console.error('Error loading notifications:', err)
-    error.value = 'Failed to load notifications'
+    console.error('Error loading notifications:', err);
+    error.value = 'Failed to load notifications';
+    notifications.value = [];
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 const connectWebSocket = () => {
-  if (!authStore.isAuthenticated) {
-    console.log('Not authenticated, skipping WebSocket connection')
-    return
-  }
-
-  if (ws?.readyState === WebSocket.OPEN) {
-    console.log('WebSocket already connected')
-    return
-  }
-
-  // Explicitly connect to backend port 3000
-  const wsUrl = 'ws://localhost:3000'
-  console.log('Attempting WebSocket connection to:', wsUrl)
-  
   try {
-    ws = new WebSocket(wsUrl)
+    console.log('Connecting to WebSocket...');
+    ws = new WebSocket('ws://localhost:3000');
 
     ws.onopen = () => {
-      console.log('WebSocket connection established')
-      reconnectAttempts = 0
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout)
-        reconnectTimeout = null
+      console.log('WebSocket connection established');
+      // Send authentication message
+      if (authStore.user && authStore.user.id) {
+        ws.send(JSON.stringify({
+          type: 'auth',
+          userId: authStore.user.id
+        }));
       }
-      loadNotifications()
-    }
-
-    ws.onclose = (event) => {
-      console.log('WebSocket connection closed:', event.code, event.reason)
-      if (authStore.isAuthenticated) {
-        const timeout = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000)
-        reconnectAttempts++
-        
-        if (reconnectAttempts <= maxReconnectAttempts) {
-          console.log(`Attempting to reconnect in ${timeout}ms (attempt ${reconnectAttempts})`)
-          reconnectTimeout = setTimeout(connectWebSocket, timeout)
-        } else {
-          console.log('Max reconnection attempts reached')
-          error.value = 'Connection lost. Please refresh the page.'
-        }
-      }
-    }
-
-    ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
-    }
+    };
 
     ws.onmessage = (event) => {
       try {
-        console.log('Raw WebSocket message received:', event.data)
-        const data = JSON.parse(event.data)
-        console.log('Parsed WebSocket message:', data)
+        const data = JSON.parse(event.data);
+        console.log('WebSocket message received:', data);
         
         if (data.type === 'notification') {
-          console.log('Processing notification:', data.data)
-          const notification = {
-            ...data.data,
-            created_at: data.data.created_at || new Date().toISOString()
-          }
-          
-          console.log('Adding notification to list:', notification)
-          notifications.value = [notification, ...notifications.value]
-          updateUnreadCount()
-          
-          // Show toast notification
-          const toast = document.createElement('div')
-          toast.className = 'toast toast-end'
-          toast.innerHTML = `
-            <div class="alert alert-info">
-              <span>${notification.message}</span>
-            </div>
-          `
-          document.body.appendChild(toast)
-          setTimeout(() => toast.remove(), 5000)
+          notifications.value.unshift(data.data);
+          updateUnreadCount();
         }
-      } catch (err) {
-        console.error('Error processing WebSocket message:', err)
-        console.error('Raw message:', event.data)
+      } catch (error) {
+        console.error('Error processing WebSocket message:', error);
       }
-    }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      reconnectWebSocket();
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket connection closed');
+      reconnectWebSocket();
+    };
   } catch (error) {
-    console.error('Error creating WebSocket connection:', error)
+    console.error('Error establishing WebSocket connection:', error);
+    reconnectWebSocket();
   }
-}
+};
+
+const reconnectWebSocket = () => {
+  if (reconnectAttempts >= maxReconnectAttempts) {
+    console.log('Max reconnection attempts reached');
+    return;
+  }
+
+  reconnectAttempts++;
+  console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
+  
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+  }
+
+  reconnectTimeout = setTimeout(() => {
+    connectWebSocket();
+  }, 2000 * Math.min(reconnectAttempts, 5)); // Exponential backoff, max 10 seconds
+};
 
 const markAsRead = async (notificationId) => {
   try {
