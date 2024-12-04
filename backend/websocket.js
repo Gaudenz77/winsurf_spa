@@ -1,6 +1,7 @@
 const WebSocket = require('ws');
 const jwt = require('jsonwebtoken');
 const cookie = require('cookie');
+const Message = require('./models/message');
 
 class WebSocketServer {
     constructor(server) {
@@ -8,7 +9,6 @@ class WebSocketServer {
             server,
             verifyClient: (info, cb) => {
                 console.log('Verifying WebSocket connection...');
-                console.log('Headers:', info.req.headers);
                 
                 try {
                     const cookies = cookie.parse(info.req.headers.cookie || '');
@@ -32,12 +32,74 @@ class WebSocketServer {
             }
         });
         
-        // Store WSS instance globally for message handlers
         global.wss = this.wss;
-        
-        this.clients = new Map(); // userId -> Set of WebSocket connections
+        this.clients = new Map();
         console.log('WebSocket server initialized');
         this.setupConnectionHandler();
+    }
+
+    // Handle chat messages
+    async handleChatMessage(ws, data) {
+        try {
+            const { targetId, messageType, content, senderId, senderUsername } = data;
+            console.log('Handling chat message:', { targetId, messageType, content, senderId, senderUsername });
+
+            // Store message in database
+            const messageId = await Message.create(content, senderId, targetId, messageType);
+            console.log('Message stored in database with ID:', messageId);
+
+            // Create message object with database ID
+            const message = {
+                type: 'CHAT_MESSAGE',
+                id: messageId,
+                content,
+                senderId,
+                senderUsername,
+                targetId,
+                messageType,
+                timestamp: new Date().toISOString()
+            };
+
+            console.log('Broadcasting message:', message);
+
+            // Broadcast to appropriate recipients
+            if (messageType === 'channel') {
+                // Broadcast to all users in the channel
+                this.broadcastToChannel(targetId, message);
+            } else {
+                // Send to specific user (DM)
+                this.sendToUser(targetId, message);
+                // Also send back to sender if they're not the target
+                if (targetId !== senderId) {
+                    this.sendToUser(senderId, message);
+                }
+            }
+        } catch (error) {
+            console.error('Error handling chat message:', error);
+            // Send error message back to sender
+            ws.send(JSON.stringify({
+                type: 'ERROR',
+                message: 'Failed to send message'
+            }));
+        }
+    }
+
+    // Handle incoming messages
+    async handleMessage(ws, message) {
+        try {
+            const data = JSON.parse(message);
+            console.log('Received message:', data);
+
+            switch (data.type) {
+                case 'CHAT_MESSAGE':
+                    await this.handleChatMessage(ws, data);
+                    break;
+                default:
+                    console.warn('Unknown message type:', data.type);
+            }
+        } catch (error) {
+            console.error('Error handling message:', error);
+        }
     }
 
     setupConnectionHandler() {
@@ -45,7 +107,6 @@ class WebSocketServer {
             const userId = req.userId;
             console.log('New WebSocket connection established for user:', userId);
 
-            // Store userId on the socket instance
             ws.userId = userId;
 
             if (!userId) {
@@ -54,7 +115,6 @@ class WebSocketServer {
                 return;
             }
 
-            // Store the connection
             if (!this.clients.has(userId)) {
                 this.clients.set(userId, new Set());
             }
@@ -62,18 +122,15 @@ class WebSocketServer {
 
             console.log(`Client connected. Total clients for user ${userId}: ${this.clients.get(userId).size}`);
 
-            // Setup ping-pong
             ws.isAlive = true;
             ws.on('pong', () => {
                 ws.isAlive = true;
             });
 
-            // Handle incoming messages
-            ws.on('message', (message) => {
-                handleMessage(ws, message);
+            ws.on('message', async (message) => {
+                await this.handleMessage(ws, message);
             });
 
-            // Handle client disconnection
             ws.on('close', () => {
                 console.log(`Client disconnected for user ${userId}`);
                 if (this.clients.has(userId)) {
@@ -84,14 +141,12 @@ class WebSocketServer {
                 }
             });
 
-            // Handle errors
             ws.on('error', (error) => {
                 console.error('WebSocket error:', error);
                 ws.close();
             });
         });
 
-        // Setup ping interval to keep connections alive
         this.setupPingInterval();
     }
 
@@ -147,94 +202,31 @@ class WebSocketServer {
             }
         });
     }
-}
 
-// Message Types
-const MESSAGE_TYPES = {
-  NOTIFICATION: 'NOTIFICATION',
-  CHAT_MESSAGE: 'CHAT_MESSAGE',
-  USER_STATUS: 'USER_STATUS'
-}
-
-// Handle incoming messages
-function handleMessage(ws, message) {
-  try {
-    console.log('Received WebSocket message:', message.toString())
-    const data = JSON.parse(message.toString())
-    
-    switch (data.type) {
-      case MESSAGE_TYPES.CHAT_MESSAGE:
-        console.log('Processing chat message:', data)
-        handleChatMessage(ws, data)
-        break
-      // Handle other message types...
-      default:
-        console.log('Unknown message type:', data.type)
+    broadcastToChannel(channelId, message) {
+        console.log(`Broadcasting to channel ${channelId}:`, message)
+        if (global.wss) {
+            global.wss.clients.forEach((client) => {
+                if (client.readyState === WebSocket.OPEN) {
+                    console.log('Sending to client:', client.userId)
+                    client.send(JSON.stringify(message))
+                }
+            })
+        } else {
+            console.error('WebSocket server not available')
+        }
     }
-  } catch (error) {
-    console.error('Error handling message:', error)
-  }
-}
 
-// Handle chat messages
-function handleChatMessage(ws, data) {
-  const { targetId, messageType, content, senderId, senderUsername } = data
-  console.log('Handling chat message:', { targetId, messageType, content, senderId, senderUsername })
-  
-  // Create message object
-  const message = {
-    type: MESSAGE_TYPES.CHAT_MESSAGE,
-    id: Date.now(),
-    content,
-    senderId,
-    senderUsername,
-    targetId,
-    messageType,
-    timestamp: new Date().toISOString()
-  }
-
-  console.log('Broadcasting message:', message)
-
-  // Broadcast to appropriate recipients
-  if (messageType === 'channel') {
-    // Broadcast to all users in the channel
-    broadcastToChannel(targetId, message)
-  } else {
-    // Send to specific user (DM)
-    sendToUser(targetId, message)
-    // Also send back to sender if they're not the target
-    if (targetId !== senderId) {
-      sendToUser(senderId, message)
+    sendToUser(userId, message) {
+        if (global.wss && global.wss.clients) {
+            const userConnections = Array.from(global.wss.clients).filter(client => client.userId === userId);
+            userConnections.forEach(client => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify(message));
+                }
+            });
+        }
     }
-  }
-}
-
-// Broadcast message to all users in a channel
-function broadcastToChannel(channelId, message) {
-  console.log(`Broadcasting to channel ${channelId}:`, message)
-  if (global.wss) {
-    global.wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        console.log('Sending to client:', client.userId)
-        client.send(JSON.stringify(message))
-      }
-    })
-  } else {
-    console.error('WebSocket server not available')
-  }
-}
-
-// Send message to specific user
-function sendToUser(userId, message) {
-  // Use the clients map from the class
-  if (global.wss && global.wss.clients) {
-    const userConnections = Array.from(global.wss.clients).filter(client => client.userId === userId);
-    userConnections.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(message));
-      }
-    });
-  }
 }
 
 module.exports = WebSocketServer;

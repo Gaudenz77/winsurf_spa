@@ -164,15 +164,78 @@ export const useChatStore = defineStore('chat', () => {
     unreadCounts.value[targetId] = 0
   }
 
+  // Load message history for a channel
+  const loadChannelHistory = async (channelId) => {
+    try {
+      console.log('Loading channel history for:', channelId);
+      const response = await fetch(`http://localhost:3000/api/messages/channel/${channelId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch channel messages');
+      }
+      const data = await response.json();
+      
+      // Initialize messages array if needed
+      if (!messages.value[channelId]) {
+        messages.value[channelId] = [];
+      }
+      
+      // Update messages with history
+      messages.value[channelId] = data.messages.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        username: msg.sender_username,
+        senderId: msg.sender_id,
+        timestamp: new Date(msg.created_at),
+        targetId: channelId
+      }));
+      
+      console.log('Channel history loaded:', messages.value[channelId]);
+    } catch (error) {
+      console.error('Error loading channel history:', error);
+    }
+  };
+
+  // Load message history for direct messages
+  const loadDirectMessageHistory = async (otherUserId) => {
+    try {
+      console.log('Loading DM history with user:', otherUserId);
+      const response = await fetch(`http://localhost:3000/api/messages/direct/${otherUserId}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch direct messages');
+      }
+      const data = await response.json();
+      
+      // Initialize messages array if needed
+      if (!messages.value[otherUserId]) {
+        messages.value[otherUserId] = [];
+      }
+      
+      // Update messages with history
+      messages.value[otherUserId] = data.messages.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        username: msg.sender_username,
+        senderId: msg.sender_id,
+        timestamp: new Date(msg.created_at),
+        targetId: otherUserId
+      }));
+      
+      console.log('DM history loaded:', messages.value[otherUserId]);
+    } catch (error) {
+      console.error('Error loading DM history:', error);
+    }
+  };
+
   return {
     channels,
     directMessages,
     messages,
     unreadCounts,
     totalUnreadCount,
+    initialize,
     sendMessage,
     markAsRead,
-    initialize,
-    handleNewMessage
+    loadChannelHistory,
+    loadDirectMessageHistory
   }
 })
