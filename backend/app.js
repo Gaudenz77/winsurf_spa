@@ -23,6 +23,7 @@ const tasksRoutes = require('./routes/tasks');
 const categoriesRoutes = require('./routes/categories');
 const usersRoutes = require('./routes/users');
 const notificationsRoutes = require('./routes/notifications');
+const messagesRoutes = require('./routes/messages');
 
 // Import services
 const NotificationService = require('./services/notificationService');
@@ -63,6 +64,7 @@ app.use('/api/tasks', tasksRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/messages', messagesRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

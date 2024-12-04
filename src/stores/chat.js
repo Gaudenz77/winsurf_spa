@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAuthStore } from './auth'
+import ChatService from '../services/chatService'
 
 export const useChatStore = defineStore('chat', () => {
   const authStore = useAuthStore()
@@ -168,11 +169,7 @@ export const useChatStore = defineStore('chat', () => {
   const loadChannelHistory = async (channelId) => {
     try {
       console.log('Loading channel history for:', channelId);
-      const response = await fetch(`http://localhost:3000/api/messages/channel/${channelId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch channel messages');
-      }
-      const data = await response.json();
+      const messageHistory = await ChatService.getChannelMessages(channelId);
       
       // Initialize messages array if needed
       if (!messages.value[channelId]) {
@@ -180,7 +177,7 @@ export const useChatStore = defineStore('chat', () => {
       }
       
       // Update messages with history
-      messages.value[channelId] = data.messages.map(msg => ({
+      messages.value[channelId] = messageHistory.map(msg => ({
         id: msg.id,
         content: msg.content,
         username: msg.sender_username,
@@ -199,11 +196,7 @@ export const useChatStore = defineStore('chat', () => {
   const loadDirectMessageHistory = async (otherUserId) => {
     try {
       console.log('Loading DM history with user:', otherUserId);
-      const response = await fetch(`http://localhost:3000/api/messages/direct/${otherUserId}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch direct messages');
-      }
-      const data = await response.json();
+      const messageHistory = await ChatService.getDirectMessages(otherUserId);
       
       // Initialize messages array if needed
       if (!messages.value[otherUserId]) {
@@ -211,7 +204,7 @@ export const useChatStore = defineStore('chat', () => {
       }
       
       // Update messages with history
-      messages.value[otherUserId] = data.messages.map(msg => ({
+      messages.value[otherUserId] = messageHistory.map(msg => ({
         id: msg.id,
         content: msg.content,
         username: msg.sender_username,

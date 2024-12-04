@@ -126,15 +126,17 @@ const messages = computed(() => {
   return chatStore.messages[key] || []
 })
 
-const selectChannel = (channel) => {
+const selectChannel = async (channel) => {
   selectedChannel.value = channel
   selectedDM.value = null
+  await chatStore.loadChannelHistory(channel.id)
   chatStore.markAsRead(channel.id)
 }
 
-const selectDM = (dm) => {
+const selectDM = async (dm) => {
   selectedDM.value = dm
   selectedChannel.value = null
+  await chatStore.loadDirectMessageHistory(dm.id)
   chatStore.markAsRead(dm.id)
 }
 
