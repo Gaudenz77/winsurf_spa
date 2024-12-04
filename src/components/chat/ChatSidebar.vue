@@ -52,7 +52,7 @@
       </div>
 
       <!-- Messages -->
-      <div class="p-4 overflow-y-auto" style="height: calc(100% - 120px);">
+      <div ref="messagesContainer" class="p-4 overflow-y-auto" style="height: calc(100% - 120px);">
         <div v-for="message in messages" :key="message.id" class="mb-4">
           <div class="flex items-start">
             <div class="flex-shrink-0">
@@ -95,7 +95,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useChatStore } from '../../stores/chat'
 
@@ -113,6 +113,7 @@ const chatStore = useChatStore()
 const newMessage = ref('')
 const selectedChannel = ref(null)
 const selectedDM = ref(null)
+const messagesContainer = ref(null)
 
 onMounted(async () => {
   console.log('ChatSidebar mounted, initializing...')
@@ -140,19 +141,35 @@ const selectDM = async (dm) => {
   chatStore.markAsRead(dm.id)
 }
 
-const sendMessage = () => {
+const sendMessage = async () => {
   if (!newMessage.value.trim()) return
   
   const targetId = selectedChannel.value?.id || selectedDM.value?.id
   const type = selectedChannel.value ? 'channel' : 'direct'
   
-  chatStore.sendMessage(newMessage.value, targetId, type)
+  await chatStore.sendMessage(newMessage.value, targetId, type)
   newMessage.value = ''
+  
+  nextTick(() => {
+    scrollToBottom()
+  })
 }
 
 const formatDate = (date) => {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
+
+const scrollToBottom = () => {
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+}
+
+watch(messages, () => {
+  nextTick(() => {
+    scrollToBottom()
+  })
+}, { deep: true })
 </script>
 
 <style scoped>
