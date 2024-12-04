@@ -154,14 +154,25 @@ router.put('/:id', async (req, res) => {
     }
 
     // Notification for due date change
-    if (formattedDueDate !== currentTask[0].due_date && currentTask[0].assigned_to) {
-      const newDate = new Date(formattedDueDate).toLocaleDateString();
-      await notificationService.createNotification(
-        currentTask[0].assigned_to,
-        req.params.id,
-        'TASK_DUE_DATE_CHANGED',
-        `Due date for task "${title}" has been updated to ${newDate}`
-      );
+    if (currentTask[0].assigned_to) {
+      const currentDate = currentTask[0].due_date ? new Date(currentTask[0].due_date) : null;
+      const newDate = formattedDueDate ? new Date(formattedDueDate) : null;
+      
+      // Only create notification if dates are actually different
+      const datesAreDifferent = 
+        (currentDate === null && newDate !== null) ||
+        (currentDate !== null && newDate === null) ||
+        (currentDate && newDate && currentDate.getTime() !== newDate.getTime());
+
+      if (datesAreDifferent) {
+        const formattedNewDate = newDate ? newDate.toLocaleDateString() : 'no due date';
+        await notificationService.createNotification(
+          currentTask[0].assigned_to,
+          req.params.id,
+          'TASK_DUE_DATE_CHANGED',
+          `Due date for task "${title}" has been updated to ${formattedNewDate}`
+        );
+      }
     }
 
     // Notification for priority change
