@@ -20,10 +20,10 @@ const server = http.createServer(app);
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: true, // Allow all origins in development
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie', 'X-Requested-With'],
   exposedHeaders: ['Set-Cookie']
 }));
 

@@ -25,6 +25,7 @@
         <!-- User Menu - Only when authenticated -->
         <div class="flex-none gap-2 nav-item" v-if="isAuthenticated">
           <NotificationBell />
+          <ChatIcon />
           <div class="dropdown dropdown-end nav-item">
             <label tabindex="0" class="btn btn-ghost btn-circle avatar">
               <div class="w-10 rounded-full">
@@ -110,6 +111,7 @@ import Welcome from './components/Welcome.vue'
 import Auth from './components/Auth.vue'
 import UserSettings from './components/UserSettings.vue'
 import NotificationBell from './components/NotificationBell.vue'
+import ChatIcon from './components/chat/ChatIcon.vue'
 
 const authStore = useAuthStore()
 const showAuth = ref(false)
