@@ -3,6 +3,11 @@ const router = express.Router();
 const Message = require('../models/message');
 const { verifyToken } = require('../middleware/auth');
 
+// Test route to verify router is working
+router.get('/test', (req, res) => {
+    res.json({ message: 'Messages router is working' });
+});
+
 // Get direct messages between two users
 router.get('/direct/:targetUserId', verifyToken, async (req, res) => {
     console.log('Fetching direct messages for users:', req.user.userId, req.params.targetUserId);
