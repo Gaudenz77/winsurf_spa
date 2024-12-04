@@ -50,6 +50,7 @@ class WebSocketServer {
 
             // Create message object with database ID
             const messageData = {
+                type: 'CHAT_MESSAGE',
                 id: messageId,
                 content,
                 targetId,
@@ -60,8 +61,12 @@ class WebSocketServer {
                 timestamp: new Date().toISOString()
             };
 
-            // Broadcast message
-            this.broadcast(messageData);
+            // Broadcast message to all connected clients
+            this.wss.clients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify(messageData));
+                }
+            });
             
         } catch (error) {
             console.error('Error handling chat message:', error);

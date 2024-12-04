@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAuthStore } from './auth'
 import ChatService from '../services/chatService'
-import { API_URL } from '../config'
+import { API_URL, WS_URL } from '../config'
 
 export const useChatStore = defineStore('chat', () => {
   const authStore = useAuthStore()
@@ -51,7 +51,11 @@ export const useChatStore = defineStore('chat', () => {
       targetId
     }
 
-    addMessage(message)
+    // Add message to state
+    if (!messages.value[targetId]) {
+      messages.value[targetId] = []
+    }
+    messages.value[targetId] = [...messages.value[targetId], message]
     
     // Increment unread count if not our message
     if (senderId !== authStore.user.id) {
@@ -61,41 +65,39 @@ export const useChatStore = defineStore('chat', () => {
 
   // Initialize WebSocket connection
   const initializeWebSocket = () => {
-    return new Promise((resolve, reject) => {
-      if (ws.value) {
-        ws.value.close()
-      }
+    if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+      console.log('WebSocket already connected')
+      return
+    }
 
-      console.log('Initializing WebSocket connection...')
-      ws.value = new WebSocket('ws://localhost:3000')
+    console.log('Initializing WebSocket connection to:', WS_URL)
+    ws.value = new WebSocket(WS_URL)
 
-      ws.value.onopen = () => {
-        console.log('Chat WebSocket connected successfully')
-        resolve()
-      }
+    ws.value.onopen = () => {
+      console.log('WebSocket connection established')
+    }
 
-      ws.value.onmessage = (event) => {
-        console.log('Chat message received:', event.data)
-        try {
-          const data = JSON.parse(event.data)
-          if (data.type === 'CHAT_MESSAGE') {
-            handleNewMessage(data)
-          }
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error)
+    ws.value.onmessage = (event) => {
+      console.log('WebSocket message received:', event.data)
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'CHAT_MESSAGE') {
+          handleNewMessage(data)
         }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error)
       }
+    }
 
-      ws.value.onerror = (error) => {
-        console.error('Chat WebSocket error:', error)
-        reject(error)
-      }
+    ws.value.onclose = () => {
+      console.log('WebSocket connection closed')
+      // Attempt to reconnect after a delay
+      setTimeout(initializeWebSocket, 3000)
+    }
 
-      ws.value.onclose = () => {
-        console.log('Chat WebSocket closed, attempting to reconnect...')
-        setTimeout(() => initializeWebSocket().catch(console.error), 5000)
-      }
-    })
+    ws.value.onerror = (error) => {
+      console.error('WebSocket error:', error)
+    }
   }
 
   // Initialize channels and DMs
@@ -103,7 +105,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       console.log('Initializing chat store...')
       // Initialize WebSocket first
-      await initializeWebSocket()
+      initializeWebSocket()
       console.log('WebSocket initialized, setting up channels...')
 
       // Set up channels
@@ -128,7 +130,7 @@ export const useChatStore = defineStore('chat', () => {
     if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
       console.error('WebSocket not connected, attempting to reconnect...')
       try {
-        await initializeWebSocket()
+        initializeWebSocket()
       } catch (error) {
         console.error('Failed to reconnect WebSocket:', error)
         throw new Error('WebSocket connection failed')
