@@ -41,45 +41,33 @@ class WebSocketServer {
     // Handle chat messages
     async handleChatMessage(ws, data) {
         try {
-            const { targetId, messageType, content, senderId, senderUsername } = data;
-            console.log('Handling chat message:', { targetId, messageType, content, senderId, senderUsername });
+            const { targetId, messageType, content, senderId, senderUsername, profile_image } = data;
+            console.log('Handling chat message:', { targetId, messageType, content, senderId, senderUsername, profile_image });
 
             // Store message in database
             const messageId = await Message.create(content, senderId, targetId, messageType);
             console.log('Message stored in database with ID:', messageId);
 
             // Create message object with database ID
-            const message = {
-                type: 'CHAT_MESSAGE',
+            const messageData = {
                 id: messageId,
                 content,
-                senderId,
-                senderUsername,
                 targetId,
                 messageType,
+                senderId,
+                senderUsername,
+                profile_image,
                 timestamp: new Date().toISOString()
             };
 
-            console.log('Broadcasting message:', message);
-
-            // Broadcast to appropriate recipients
-            if (messageType === 'channel') {
-                // Broadcast to all users in the channel
-                this.broadcastToChannel(targetId, message);
-            } else {
-                // Send to specific user (DM)
-                this.sendToUser(targetId, message);
-                // Also send back to sender if they're not the target
-                if (targetId !== senderId) {
-                    this.sendToUser(senderId, message);
-                }
-            }
+            // Broadcast message
+            this.broadcast(messageData);
+            
         } catch (error) {
             console.error('Error handling chat message:', error);
-            // Send error message back to sender
             ws.send(JSON.stringify({
                 type: 'ERROR',
-                message: 'Failed to send message'
+                message: 'Failed to process message'
             }));
         }
     }
@@ -226,6 +214,14 @@ class WebSocketServer {
                 }
             });
         }
+    }
+
+    broadcast(message) {
+        this.wss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify(message));
+            }
+        });
     }
 }
 

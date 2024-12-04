@@ -54,10 +54,21 @@
       <!-- Messages -->
       <div ref="messagesContainer" class="p-4 overflow-y-auto" style="height: calc(100% - 120px);">
         <div v-for="message in messages" :key="message.id" class="mb-4">
+          {{ console.log('Message data:', message) }}
           <div class="flex items-start">
             <div class="flex-shrink-0">
-              <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                {{ message.username[0].toUpperCase() }}
+              <div class="w-8 h-8 rounded-full overflow-hidden">
+                <img 
+                  v-if="message.profile_image" 
+                  :src="message.profile_image"
+                  :alt="message.username"
+                  class="w-full h-full object-cover"
+                  @error="console.error('Failed to load profile image:', message.profile_image)"
+                />
+                <div v-else class="w-full h-full bg-primary flex items-center justify-center text-primary-content">
+                  {{ message.username[0].toUpperCase() }}
+                  {{ console.log('No profile image for:', message.username) }}
+                </div>
               </div>
             </div>
             <div class="ml-3">
@@ -98,6 +109,7 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useChatStore } from '../../stores/chat'
+import { API_URL } from '../../config'
 
 const props = defineProps({
   isOpen: {
@@ -157,6 +169,12 @@ const sendMessage = async () => {
 
 const formatDate = (date) => {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+const getProfileImageUrl = (profileImage) => {
+  if (!profileImage) return null
+  console.log('Profile image URL:', `${API_URL}/uploads/profile/${profileImage}`)
+  return `${API_URL}/uploads/profile/${profileImage}`
 }
 
 const scrollToBottom = () => {

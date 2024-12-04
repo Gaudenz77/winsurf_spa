@@ -50,6 +50,7 @@ app.use((req, res, next) => {
 });
 
 // Serve static files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Test route to verify Express is working

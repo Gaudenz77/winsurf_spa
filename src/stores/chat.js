@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAuthStore } from './auth'
 import ChatService from '../services/chatService'
+import { API_URL } from '../config'
 
 export const useChatStore = defineStore('chat', () => {
   const authStore = useAuthStore()
@@ -39,21 +40,23 @@ export const useChatStore = defineStore('chat', () => {
       return
     }
     
-    // Create message object
+    // Create message object with full profile image URL
     const message = {
       id: data.id,
       content: data.content,
       username: data.senderUsername,
+      profile_image: data.profile_image ? `${API_URL}/${data.profile_image}` : null,
       timestamp: new Date(data.timestamp),
       senderId: data.senderId,
       targetId
     }
 
-    // Add message to state
     addMessage(message)
-
-    // Update unread count for messages from others
-    unreadCounts.value[targetId] = (unreadCounts.value[targetId] || 0) + 1
+    
+    // Increment unread count if not our message
+    if (senderId !== authStore.user.id) {
+      incrementUnreadCount(targetId)
+    }
   }
 
   // Initialize WebSocket connection
@@ -132,37 +135,46 @@ export const useChatStore = defineStore('chat', () => {
       }
     }
 
-    const messageData = {
-      type: 'CHAT_MESSAGE',
-      content,
-      targetId,
-      messageType: type,
-      senderId: authStore.user.id,
-      senderUsername: authStore.user.username,
-      timestamp: new Date().toISOString()
-    }
-
     try {
-      console.log('Sending message:', messageData)
-      ws.value.send(JSON.stringify(messageData))
-      
-      // Add message optimistically
-      addMessage({
-        id: Date.now(), // This will be different from the server ID, but it's okay
+      // Create optimistic message
+      const optimisticMessage = {
+        id: Date.now(), // Temporary ID
         content,
         username: authStore.user.username,
-        timestamp: new Date(),
+        profile_image: authStore.user.profile_image ? `${API_URL}/${authStore.user.profile_image}` : null,
         senderId: authStore.user.id,
+        timestamp: new Date(),
         targetId
-      })
+      }
+      
+      // Add message optimistically
+      addMessage(optimisticMessage)
+      
+      // Send message through WebSocket
+      ws.value.send(JSON.stringify({
+        type: 'CHAT_MESSAGE',
+        content,
+        targetId,
+        messageType: type,
+        senderUsername: authStore.user.username,
+        profile_image: authStore.user.profile_image,
+        senderId: authStore.user.id,
+        timestamp: new Date().toISOString()
+      }))
+      
+      return true
     } catch (error) {
-      console.error('Failed to send message:', error)
-      throw error
+      console.error('Error sending message:', error)
+      return false
     }
   }
 
   const markAsRead = (targetId) => {
     unreadCounts.value[targetId] = 0
+  }
+
+  const incrementUnreadCount = (targetId) => {
+    unreadCounts.value[targetId] = (unreadCounts.value[targetId] || 0) + 1
   }
 
   // Load message history for a channel
@@ -181,6 +193,7 @@ export const useChatStore = defineStore('chat', () => {
         id: msg.id,
         content: msg.content,
         username: msg.sender_username,
+        profile_image: msg.profile_image ? `${API_URL}/${msg.profile_image}` : null,
         senderId: msg.sender_id,
         timestamp: new Date(msg.created_at),
         targetId: channelId
@@ -208,6 +221,7 @@ export const useChatStore = defineStore('chat', () => {
         id: msg.id,
         content: msg.content,
         username: msg.sender_username,
+        profile_image: msg.profile_image ? `${API_URL}/${msg.profile_image}` : null,
         senderId: msg.sender_id,
         timestamp: new Date(msg.created_at),
         targetId: otherUserId

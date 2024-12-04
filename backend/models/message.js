@@ -26,7 +26,7 @@ class Message {
         try {
             console.log('Executing channel messages query with params:', { channelId, limit });
             const query = `
-                SELECT m.*, u.username as sender_username 
+                SELECT m.*, u.username as sender_username, u.profile_image 
                 FROM messages m 
                 JOIN users u ON m.sender_id = u.id 
                 WHERE m.target_id = ? AND m.message_type = 'channel' 
@@ -54,12 +54,15 @@ class Message {
         try {
             console.log('Executing direct messages query with params:', { userId1, userId2, limit });
             const query = `
-                SELECT m.*, u.username as sender_username 
+                SELECT m.*, u.username as sender_username, u.profile_image 
                 FROM messages m 
                 JOIN users u ON m.sender_id = u.id 
                 WHERE m.message_type = 'direct' 
-                AND ((m.sender_id = ? AND m.target_id = ?) 
-                OR (m.sender_id = ? AND m.target_id = ?))
+                AND (
+                    (m.sender_id = ? AND m.target_id = ?) 
+                    OR 
+                    (m.sender_id = ? AND m.target_id = ?)
+                ) 
                 ORDER BY m.created_at DESC 
                 LIMIT ?
             `;

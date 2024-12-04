@@ -15,7 +15,12 @@ router.get('/direct/:targetUserId', verifyToken, async (req, res) => {
         const currentUserId = req.user.userId;
         const targetUserId = parseInt(req.params.targetUserId);
         const messages = await Message.getDirectMessages(currentUserId, targetUserId);
-        console.log('Found direct messages:', messages.length);
+        console.log('Found direct messages with profile images:', messages.map(m => ({
+            id: m.id,
+            content: m.content,
+            sender_username: m.sender_username,
+            profile_image: m.profile_image
+        })));
         res.json(messages);
     } catch (error) {
         console.error('Error fetching direct messages:', error);
@@ -35,8 +40,12 @@ router.get('/channel/:channelId', verifyToken, async (req, res) => {
         
         const messages = await Message.getChannelMessages(channelId);
         console.log('Database query completed');
-        console.log('Found messages:', messages);
-        console.log('Message count:', messages.length);
+        console.log('Messages with profile images:', messages.map(m => ({
+            id: m.id,
+            content: m.content,
+            sender_username: m.sender_username,
+            profile_image: m.profile_image
+        })));
         
         res.json(messages);
     } catch (error) {
