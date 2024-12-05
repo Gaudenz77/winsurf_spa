@@ -7,7 +7,7 @@
     <!-- Header -->
     <div class="flex justify-between items-center p-4 bg-primary text-primary-content">
       <h2 class="text-lg font-bold">Chat</h2>
-      <button @click="$emit('close')" class="btn btn-ghost btn-sm">
+      <button @click="$emit('close')" class="btn btn-ghost btn-sm  pt-0.5">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -55,30 +55,34 @@
       <div ref="messagesContainer" class="p-4 overflow-y-auto" style="height: calc(100% - 120px);">
         <div v-for="message in messages" :key="message.id" class="mb-4">
           {{ console.log('Message data:', message) }}
-          <div class="flex items-start">
-            <div class="flex-shrink-0">
+          <div :class="[
+            'chat',
+            message.senderId === authStore.user.id ? 'chat-start' : 'chat-end'
+          ]">
+            <div class="chat-image avatar">
               <div class="w-8 h-8 rounded-full overflow-hidden">
                 <img 
                   v-if="message.profile_image" 
                   :src="message.profile_image"
                   :alt="message.username"
                   class="w-full h-full object-cover"
-                  @error="console.error('Failed to load profile image:', message.profile_image)"
                 />
                 <div v-else class="w-full h-full bg-primary flex items-center justify-center text-primary-content">
                   {{ message.username[0].toUpperCase() }}
-                  {{ console.log('No profile image for:', message.username) }}
                 </div>
               </div>
             </div>
-            <div class="ml-3">
-              <p class="text-sm font-medium">
-                {{ message.username }}
-                <span class="text-xs text-base-content/60 ml-2">
-                  {{ formatDate(message.timestamp) }}
-                </span>
-              </p>
-              <p class="text-sm text-base-content">{{ message.content }}</p>
+            <div class="chat-header mb-1">
+              {{ message.username }}
+              <time class="text-xs opacity-50 ml-2">{{ formatDate(message.timestamp) }}</time>
+            </div>
+            <div :class="[
+              'chat-bubble',
+              message.senderId === authStore.user.id 
+                ? 'chat-bubble-warning opacity-80' 
+                : 'chat-bubble-accent opacity-80'
+            ]">
+              {{ message.content }}
             </div>
           </div>
         </div>
@@ -193,5 +197,13 @@ watch(messages, () => {
 <style scoped>
 .chat-sidebar {
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+}
+.chat-bubble-primary {
+  background-color: #4f46e5;
+  color: #ffffff;
+}
+.chat-bubble-accent {
+  background-color: #f0f0f0;
+  color: #333333;
 }
 </style>

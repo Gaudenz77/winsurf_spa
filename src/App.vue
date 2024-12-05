@@ -13,7 +13,7 @@
             </svg>
             Theme
           </label>
-          <ul tabindex="0" class="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
+          <ul tabindex="0" class="relative top-0 dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-52">
             <li v-for="availableTheme in themes" :key="availableTheme">
               <a :class="{ 'active': theme === availableTheme }" @click="setTheme(availableTheme)">
                 {{ availableTheme.charAt(0).toUpperCase() + availableTheme.slice(1) }}
@@ -117,7 +117,7 @@ const authStore = useAuthStore()
 const showAuth = ref(false)
 const showSettings = ref(false)
 const theme = ref('light')
-const themes = ["light", "dark", "cyberpunk", "cupcake", "dracula", "acid", "coffee", "synthwave", "retro", "garden", "forest", "aqua", "lofi", "pastel", "fantasy", "wireframe", "black", "luxury", "dracula", "lofi", "nord"]
+const themes = ["light", "dark", "cyberpunk", "cupcake", "dracula", "acid", "coffee", "synthwave", "retro", "garden", "forest", "aqua", "pastel", "fantasy", "wireframe", "black", "luxury", "dracula", "lofi", "nord"]
 
 // Computed properties
 const isAuthenticated = computed(() => authStore.isAuthenticated)
