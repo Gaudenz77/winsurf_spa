@@ -55,4 +55,42 @@ router.get('/channel/:channelId', verifyToken, async (req, res) => {
     }
 });
 
+// Get messages with pagination
+router.get('/messages/:targetId', verifyToken, async (req, res) => {
+  try {
+    const { targetId } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+    const offset = (page - 1) * limit;
+
+    const query = `
+      SELECT m.*, u.username, u.profile_image 
+      FROM messages m
+      JOIN users u ON m.sender_id = u.id
+      WHERE m.target_id = ?
+      ORDER BY m.timestamp DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const [messages] = await Message.execute(query, [targetId, parseInt(limit), parseInt(offset)]);
+    
+    // Get total count for pagination
+    const [[{ total }]] = await Message.execute(
+      'SELECT COUNT(*) as total FROM messages WHERE target_id = ?',
+      [targetId]
+    );
+
+    res.json({
+      messages: messages.reverse(), // Reverse to show oldest first
+      pagination: {
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(total / limit),
+        totalMessages: total
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching messages:', error);
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
 module.exports = router;
