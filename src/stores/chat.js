@@ -13,69 +13,11 @@ export const useChatStore = defineStore('chat', () => {
   const directMessages = ref([])
   const messages = ref({}) // channelId/userId -> messages[]
   const unreadCounts = ref({})
-  const currentPage = ref({})
-  const totalPages = ref({})
-  const isLoading = ref({})
-  const hasMore = ref({})
   
   // Computed
   const totalUnreadCount = computed(() => {
     return Object.values(unreadCounts.value).reduce((acc, count) => acc + count, 0)
   })
-
-  // Initialize chat state for a target
-  const initializeChatState = (targetId) => {
-    if (!messages.value[targetId]) {
-      messages.value[targetId] = []
-      currentPage.value[targetId] = 1
-      totalPages.value[targetId] = 1
-      isLoading.value[targetId] = false
-      hasMore.value[targetId] = true
-    }
-  }
-
-  // Load messages with pagination
-  const loadMessages = async (targetId, page = 1) => {
-    try {
-      initializeChatState(targetId)
-      
-      if (isLoading.value[targetId] || !hasMore.value[targetId]) return
-      
-      isLoading.value[targetId] = true
-      const response = await fetch(`${API_URL}/messages/${targetId}?page=${page}&limit=20`, {
-        headers: {
-          'Authorization': `Bearer ${authStore.token}`
-        }
-      })
-      
-      if (!response.ok) throw new Error('Failed to fetch messages')
-      
-      const data = await response.json()
-      
-      // Update pagination state
-      currentPage.value[targetId] = data.pagination.currentPage
-      totalPages.value[targetId] = data.pagination.totalPages
-      hasMore.value[targetId] = currentPage.value[targetId] < totalPages.value[targetId]
-
-      // Add messages to state
-      if (page === 1) {
-        messages.value[targetId] = data.messages
-      } else {
-        messages.value[targetId] = [...data.messages, ...messages.value[targetId]]
-      }
-    } catch (error) {
-      console.error('Error loading messages:', error)
-    } finally {
-      isLoading.value[targetId] = false
-    }
-  }
-
-  // Load more messages (for infinite scroll)
-  const loadMoreMessages = async (targetId) => {
-    if (hasMore.value[targetId]) {
-      await loadMessages(targetId, currentPage.value[targetId] + 1)
-    }
-  }
 
   // Add message to state
   const addMessage = (message) => {
@@ -299,15 +241,9 @@ export const useChatStore = defineStore('chat', () => {
     messages,
     unreadCounts,
     totalUnreadCount,
-    currentPage,
-    totalPages,
-    isLoading,
-    hasMore,
     initialize,
     sendMessage,
     markAsRead,
-    loadMessages,
-    loadMoreMessages,
     loadChannelHistory,
     loadDirectMessageHistory
   }

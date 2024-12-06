@@ -49,10 +49,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files from uploads directory
+// Serve static files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Serve static files from public directory
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Test route to verify Express is working

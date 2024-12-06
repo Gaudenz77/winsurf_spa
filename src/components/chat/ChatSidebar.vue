@@ -52,31 +52,20 @@
       </div>
 
       <!-- Messages -->
-      <div 
-        ref="messagesContainer" 
-        class="p-4 overflow-y-auto" 
-        style="height: calc(100% - 120px);" 
-        @scroll="handleScroll"
-      >
-        <!-- Loading indicator -->
-        <div v-if="chatStore.isLoading[selectedChannel?.id || selectedDM?.id]" class="text-center py-2 mb-4">
-          <span class="loading loading-spinner loading-md"></span>
-        </div>
-        
+      <div ref="messagesContainer" class="p-4 overflow-y-auto" style="height: calc(100% - 120px);">
         <div v-for="message in messages" :key="message.id" class="mb-4">
           {{ console.log('Message data:', message) }}
           <div :class="[
             'chat',
-            message.senderId === authStore.user.id ? 'chat-start' : 'chat-end'
+            message.senderId === authStore.user.id ? 'chat-end' : 'chat-start'
           ]">
             <div class="chat-image avatar">
               <div class="w-8 h-8 rounded-full overflow-hidden">
                 <img 
                   v-if="message.profile_image" 
-                  :src="getProfileImageUrl(message.profile_image)"
+                  :src="message.profile_image"
                   :alt="message.username"
                   class="w-full h-full object-cover"
-                  @error="$event.target.style.display='none'"
                 />
                 <div v-else class="w-full h-full bg-primary flex items-center justify-center text-primary-content">
                   {{ message.username[0].toUpperCase() }}
@@ -141,56 +130,10 @@ const newMessage = ref('')
 const selectedChannel = ref(null)
 const selectedDM = ref(null)
 const messagesContainer = ref(null)
-const isScrolledToBottom = ref(true)
-
-// Handle scroll for infinite loading
-const handleScroll = async () => {
-  const container = messagesContainer.value
-  if (!container) return
-
-  // Check if scrolled near the top (within 100px)
-  if (container.scrollTop < 100 && !chatStore.isLoading[selectedChannel.value?.id || selectedDM.value?.id] && chatStore.hasMore[selectedChannel.value?.id || selectedDM.value?.id]) {
-    // Load more messages
-    const previousHeight = container.scrollHeight
-    await chatStore.loadMoreMessages(selectedChannel.value?.id || selectedDM.value?.id)
-    
-    // Maintain scroll position after loading more messages
-    if (container.scrollHeight !== previousHeight) {
-      container.scrollTop = container.scrollHeight - previousHeight
-    }
-  }
-
-  // Update bottom scroll state
-  isScrolledToBottom.value = 
-    container.scrollHeight - container.scrollTop <= container.clientHeight + 100
-}
-
-// Scroll to bottom when new messages arrive
-watch(() => chatStore.messages[selectedChannel.value?.id || selectedDM.value?.id], () => {
-  if (isScrolledToBottom.value) {
-    setTimeout(() => {
-      const container = messagesContainer.value
-      if (container) {
-        container.scrollTop = container.scrollHeight
-      }
-    }, 0)
-  }
-}, { deep: true })
 
 onMounted(async () => {
   console.log('ChatSidebar mounted, initializing...')
   await chatStore.initialize()
-  
-  // Initial message load
-  if (selectedChannel.value || selectedDM.value) {
-    chatStore.loadMessages(selectedChannel.value?.id || selectedDM.value?.id)
-  }
-  
-  // Add scroll event listener
-  const container = messagesContainer.value
-  if (container) {
-    container.addEventListener('scroll', handleScroll)
-  }
 })
 
 const channels = computed(() => chatStore.channels)
@@ -234,9 +177,8 @@ const formatDate = (date) => {
 
 const getProfileImageUrl = (profileImage) => {
   if (!profileImage) return null
-  // Remove API_URL if it's already in the path
-  const cleanPath = profileImage.replace(API_URL, '').replace(/^\/+/, '')
-  return `${API_URL}/${cleanPath}`
+  console.log('Profile image URL:', `${API_URL}/uploads/profile/${profileImage}`)
+  return `${API_URL}/uploads/profile/${profileImage}`
 }
 
 const scrollToBottom = () => {
