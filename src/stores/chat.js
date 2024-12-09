@@ -256,8 +256,12 @@ export const useChatStore = defineStore('chat', () => {
         timestamp: new Date(msg.created_at),
         targetId
       }));
-    
-    messages.value[targetId] = [...filteredNewMessages, ...messages.value[targetId]];
+  
+    // Sort messages by timestamp to ensure correct order
+    messages.value[targetId] = [
+      ...filteredNewMessages, 
+      ...messages.value[targetId]
+    ].sort((a, b) => a.timestamp - b.timestamp);
   }
 
   return {
