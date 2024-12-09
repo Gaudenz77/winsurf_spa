@@ -264,6 +264,82 @@ export const useChatStore = defineStore('chat', () => {
     ].sort((a, b) => a.timestamp - b.timestamp);
   }
 
+  // Add methods for message reactions
+  const addMessageReaction = async (targetId, messageId, reaction) => {
+    try {
+      const result = await ChatService.addMessageReaction(messageId, reaction);
+      
+      // Update local state
+      if (result.success) {
+        const targetMessages = messages.value[targetId];
+        const messageIndex = targetMessages.findIndex(msg => msg.id === messageId);
+        
+        if (messageIndex !== -1) {
+          // Initialize reactions if not exists
+          if (!targetMessages[messageIndex].reactions) {
+            targetMessages[messageIndex].reactions = {};
+          }
+          
+          // Update or add reaction
+          if (!targetMessages[messageIndex].reactions[reaction]) {
+            targetMessages[messageIndex].reactions[reaction] = {
+              count: 1,
+              userIds: [authStore.user.id]
+            };
+          } else {
+            const currentReaction = targetMessages[messageIndex].reactions[reaction];
+            currentReaction.count++;
+            if (!currentReaction.userIds.includes(authStore.user.id)) {
+              currentReaction.userIds.push(authStore.user.id);
+            }
+          }
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error adding message reaction:', error);
+      throw error;
+    }
+  };
+
+  // Remove a reaction from a message
+  const removeMessageReaction = async (targetId, messageId, reaction) => {
+    try {
+      const result = await ChatService.removeMessageReaction(messageId, reaction);
+      
+      // Update local state
+      if (result.success) {
+        const targetMessages = messages.value[targetId];
+        const messageIndex = targetMessages.findIndex(msg => msg.id === messageId);
+        
+        if (messageIndex !== -1 && targetMessages[messageIndex].reactions) {
+          const currentReaction = targetMessages[messageIndex].reactions[reaction];
+          
+          if (currentReaction) {
+            currentReaction.count--;
+            
+            // Remove user from userIds
+            const userIndex = currentReaction.userIds.indexOf(authStore.user.id);
+            if (userIndex !== -1) {
+              currentReaction.userIds.splice(userIndex, 1);
+            }
+            
+            // Remove reaction entirely if count reaches 0
+            if (currentReaction.count === 0) {
+              delete targetMessages[messageIndex].reactions[reaction];
+            }
+          }
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error removing message reaction:', error);
+      throw error;
+    }
+  };
+
   return {
     channels,
     directMessages,
@@ -275,6 +351,8 @@ export const useChatStore = defineStore('chat', () => {
     markAsRead,
     loadChannelHistory,
     loadDirectMessageHistory,
-    prependMessages
+    prependMessages,
+    addMessageReaction,
+    removeMessageReaction
   }
 })

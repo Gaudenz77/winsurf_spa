@@ -43,6 +43,17 @@ class Message {
 
             const [messages] = await db.query(query, [channelId, limit, offset]);
             
+            // Get reactions for these messages
+            if (messages.length > 0) {
+                const messageIds = messages.map(m => m.id);
+                const reactions = await this.getMessageReactions(messageIds);
+                
+                // Attach reactions to messages
+                messages.forEach(message => {
+                    message.reactions = reactions[message.id] || {};
+                });
+            }
+
             console.log('Retrieved channel messages:', {
                 messageCount: messages.length,
                 firstMessage: messages.length > 0 ? messages[0].created_at : null,
@@ -99,6 +110,17 @@ class Message {
 
             const [messages] = await db.query(query, [userId1, userId2, userId2, userId1, limit, offset]);
             
+            // Get reactions for these messages
+            if (messages.length > 0) {
+                const messageIds = messages.map(m => m.id);
+                const reactions = await this.getMessageReactions(messageIds);
+                
+                // Attach reactions to messages
+                messages.forEach(message => {
+                    message.reactions = reactions[message.id] || {};
+                });
+            }
+
             console.log('Retrieved direct messages:', {
                 messageCount: messages.length,
                 firstMessage: messages.length > 0 ? messages[0].created_at : null,
@@ -218,6 +240,102 @@ class Message {
             return messages;
         } catch (error) {
             console.error('Error in getAllMessages:', error);
+            throw error;
+        }
+    }
+
+    static async addReaction(messageId, userId, reaction) {
+        try {
+            // Validate reaction
+            const validReactions = [
+                'thumbs_up', 'thumbs_down', 
+                'heart', 'laugh', 'sad', 
+                'wow', 'angry', 'celebrate'
+            ];
+            
+            if (!validReactions.includes(reaction)) {
+                throw new Error('Invalid reaction');
+            }
+
+            const query = `
+                INSERT INTO message_reactions 
+                (message_id, user_id, reaction) 
+                VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE reaction = ?
+            `;
+
+            const [result] = await db.query(query, [messageId, userId, reaction, reaction]);
+            
+            return {
+                messageId,
+                userId,
+                reaction,
+                success: result.affectedRows > 0
+            };
+        } catch (error) {
+            console.error('Error adding reaction:', error);
+            throw error;
+        }
+    }
+
+    static async removeReaction(messageId, userId, reaction) {
+        try {
+            const query = `
+                DELETE FROM message_reactions 
+                WHERE message_id = ? 
+                AND user_id = ? 
+                AND reaction = ?
+            `;
+
+            const [result] = await db.query(query, [messageId, userId, reaction]);
+            
+            return {
+                messageId,
+                userId,
+                reaction,
+                success: result.affectedRows > 0
+            };
+        } catch (error) {
+            console.error('Error removing reaction:', error);
+            throw error;
+        }
+    }
+
+    static async getMessageReactions(messageIds) {
+        try {
+            if (!messageIds || messageIds.length === 0) {
+                return {};
+            }
+
+            const placeholders = messageIds.map(() => '?').join(',');
+            const query = `
+                SELECT 
+                    message_id, 
+                    reaction, 
+                    COUNT(*) as count,
+                    JSON_ARRAYAGG(user_id) as user_ids
+                FROM message_reactions 
+                WHERE message_id IN (${placeholders})
+                GROUP BY message_id, reaction
+            `;
+
+            const [reactions] = await db.query(query, messageIds);
+            
+            // Transform reactions into a more usable format
+            const reactionMap = {};
+            reactions.forEach(reaction => {
+                if (!reactionMap[reaction.message_id]) {
+                    reactionMap[reaction.message_id] = {};
+                }
+                reactionMap[reaction.message_id][reaction.reaction] = {
+                    count: reaction.count,
+                    userIds: JSON.parse(reaction.user_ids)
+                };
+            });
+
+            return reactionMap;
+        } catch (error) {
+            console.error('Error getting message reactions:', error);
             throw error;
         }
     }

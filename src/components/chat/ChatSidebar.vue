@@ -53,38 +53,11 @@
 
       <!-- Messages -->
       <div ref="messagesContainer" class="p-4 overflow-y-auto" style="height: calc(100% - 120px); margin-right: 1rem;">
-        <div v-for="message in messages" :key="message.id" class="mb-4">
-          {{ console.log('Message data:', message) }}
-          <div :class="[
-            'chat',
-            message.senderId === authStore.user.id ? 'chat-end' : 'chat-start'
-          ]">
-            <div class="chat-image avatar">
-              <div class="w-8 h-8 rounded-full overflow-hidden">
-                <img 
-                  v-if="message.profile_image" 
-                  :src="message.profile_image"
-                  :alt="message.username"
-                  class="w-full h-full object-cover"
-                />
-                <div v-else class="w-full h-full bg-primary flex items-center justify-center text-primary-content">
-                  {{ message.username[0].toUpperCase() }}
-                </div>
-              </div>
-            </div>
-            <div class="chat-header mb-1">
-              {{ message.username }}
-              <time class="text-xs opacity-50 ml-2">{{ formatDate(message.timestamp) }}</time>
-            </div>
-            <div :class="[
-              'chat-bubble',
-              message.senderId === authStore.user.id 
-                ? 'chat-bubble-warning opacity-80' 
-                : 'chat-bubble-accent opacity-80'
-            ]">
-              {{ message.content }}
-            </div>
-          </div>
+        <div v-for="message in messages" :key="message.id">
+          <ChatMessage 
+            :message="message" 
+            :targetId="selectedChannel?.id || selectedDM?.id"
+          />
         </div>
         <div v-if="isLoading" class="text-center p-4">
           Loading more messages...
@@ -118,6 +91,7 @@ import { useAuthStore } from '../../stores/auth'
 import { useChatStore } from '../../stores/chat'
 import { API_URL } from '../../config'
 import axios from 'axios'
+import ChatMessage from './ChatMessage.vue'
 
 const props = defineProps({
   isOpen: {

@@ -103,4 +103,60 @@ router.get('/channel/:channelId', verifyToken, async (req, res) => {
     }
 });
 
+// Add a reaction to a message
+router.post('/:messageId/react', verifyToken, async (req, res) => {
+    try {
+        const messageId = parseInt(req.params.messageId);
+        const userId = req.user.userId;
+        const { reaction } = req.body;
+
+        console.log('Adding reaction:', {
+            messageId,
+            userId,
+            reaction
+        });
+
+        const result = await Message.addReaction(messageId, userId, reaction);
+        
+        res.json({
+            success: true,
+            reaction: result
+        });
+    } catch (error) {
+        console.error('Error adding reaction:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: error.message || 'Failed to add reaction' 
+        });
+    }
+});
+
+// Remove a reaction from a message
+router.delete('/:messageId/react', verifyToken, async (req, res) => {
+    try {
+        const messageId = parseInt(req.params.messageId);
+        const userId = req.user.userId;
+        const { reaction } = req.body;
+
+        console.log('Removing reaction:', {
+            messageId,
+            userId,
+            reaction
+        });
+
+        const result = await Message.removeReaction(messageId, userId, reaction);
+        
+        res.json({
+            success: true,
+            reaction: result
+        });
+    } catch (error) {
+        console.error('Error removing reaction:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: error.message || 'Failed to remove reaction' 
+        });
+    }
+});
+
 module.exports = router;

@@ -29,6 +29,34 @@ class ChatService {
             throw error;
         }
     }
+
+    // Add a reaction to a message
+    static async addMessageReaction(messageId, reaction) {
+      try {
+        const response = await axios.post(`${API_URL}/api/messages/${messageId}/react`, 
+          { reaction }, 
+          { withCredentials: true }
+        );
+        return response.data;
+      } catch (error) {
+        console.error('Error adding message reaction:', error);
+        throw error;
+      }
+    }
+
+    // Remove a reaction from a message
+    static async removeMessageReaction(messageId, reaction) {
+      try {
+        const response = await axios.delete(`${API_URL}/api/messages/${messageId}/react`, { 
+          data: { reaction },
+          withCredentials: true
+        });
+        return response.data;
+      } catch (error) {
+        console.error('Error removing message reaction:', error);
+        throw error;
+      }
+    }
 }
 
 export default ChatService;
