@@ -3,10 +3,11 @@ import { API_URL } from '../config';
 
 class ChatService {
     // Fetch direct messages between current user and target user
-    static async getDirectMessages(targetUserId) {
+    static async getDirectMessages(targetUserId, page = 1, limit = 50) {
         try {
             const response = await axios.get(`${API_URL}/api/messages/direct/${targetUserId}`, {
-                withCredentials: true
+                withCredentials: true,
+                params: { page, limit }
             });
             return response.data;
         } catch (error) {
@@ -16,10 +17,11 @@ class ChatService {
     }
 
     // Fetch channel messages
-    static async getChannelMessages(channelId) {
+    static async getChannelMessages(channelId, page = 1, limit = 50) {
         try {
             const response = await axios.get(`${API_URL}/api/messages/channel/${channelId}`, {
-                withCredentials: true
+                withCredentials: true,
+                params: { page, limit }
             });
             return response.data;
         } catch (error) {

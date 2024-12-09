@@ -183,7 +183,7 @@ export const useChatStore = defineStore('chat', () => {
   const loadChannelHistory = async (channelId) => {
     try {
       console.log('Loading channel history for:', channelId);
-      const messageHistory = await ChatService.getChannelMessages(channelId);
+      const response = await ChatService.getChannelMessages(channelId, 1, 50);
       
       // Initialize messages array if needed
       if (!messages.value[channelId]) {
@@ -191,7 +191,7 @@ export const useChatStore = defineStore('chat', () => {
       }
       
       // Update messages with history
-      messages.value[channelId] = messageHistory.map(msg => ({
+      messages.value[channelId] = (response.messages || []).map(msg => ({
         id: msg.id,
         content: msg.content,
         username: msg.sender_username,
@@ -200,18 +200,19 @@ export const useChatStore = defineStore('chat', () => {
         timestamp: new Date(msg.created_at),
         targetId: channelId
       }));
-      
-      console.log('Channel history loaded:', messages.value[channelId]);
+
+      return messages.value[channelId];
     } catch (error) {
       console.error('Error loading channel history:', error);
+      throw error;
     }
   };
 
   // Load message history for direct messages
   const loadDirectMessageHistory = async (otherUserId) => {
     try {
-      console.log('Loading DM history with user:', otherUserId);
-      const messageHistory = await ChatService.getDirectMessages(otherUserId);
+      console.log('Loading direct message history with:', otherUserId);
+      const response = await ChatService.getDirectMessages(otherUserId, 1, 50);
       
       // Initialize messages array if needed
       if (!messages.value[otherUserId]) {
@@ -219,7 +220,7 @@ export const useChatStore = defineStore('chat', () => {
       }
       
       // Update messages with history
-      messages.value[otherUserId] = messageHistory.map(msg => ({
+      messages.value[otherUserId] = (response.messages || []).map(msg => ({
         id: msg.id,
         content: msg.content,
         username: msg.sender_username,
@@ -228,12 +229,36 @@ export const useChatStore = defineStore('chat', () => {
         timestamp: new Date(msg.created_at),
         targetId: otherUserId
       }));
-      
-      console.log('DM history loaded:', messages.value[otherUserId]);
+
+      return messages.value[otherUserId];
     } catch (error) {
-      console.error('Error loading DM history:', error);
+      console.error('Error loading direct message history:', error);
+      throw error;
     }
   };
+
+  // Add method to prepend messages for pagination
+  const prependMessages = (targetId, newMessages) => {
+    if (!messages.value[targetId]) {
+      messages.value[targetId] = [];
+    }
+    
+    // Prepend new messages, avoiding duplicates
+    const existingIds = new Set(messages.value[targetId].map(m => m.id));
+    const filteredNewMessages = newMessages
+      .filter(msg => !existingIds.has(msg.id))
+      .map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        username: msg.sender_username,
+        profile_image: msg.profile_image ? `${API_URL}/${msg.profile_image}` : null,
+        senderId: msg.sender_id,
+        timestamp: new Date(msg.created_at),
+        targetId
+      }));
+    
+    messages.value[targetId] = [...filteredNewMessages, ...messages.value[targetId]];
+  }
 
   return {
     channels,
@@ -245,6 +270,7 @@ export const useChatStore = defineStore('chat', () => {
     sendMessage,
     markAsRead,
     loadChannelHistory,
-    loadDirectMessageHistory
+    loadDirectMessageHistory,
+    prependMessages
   }
 })

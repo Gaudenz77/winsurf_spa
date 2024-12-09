@@ -52,7 +52,7 @@
       </div>
 
       <!-- Messages -->
-      <div ref="messagesContainer" class="p-4 overflow-y-auto" style="height: calc(100% - 120px);">
+      <div ref="messagesContainer" class="p-4 overflow-y-auto" style="height: calc(100% - 120px); margin-right: 1rem;">
         <div v-for="message in messages" :key="message.id" class="mb-4">
           {{ console.log('Message data:', message) }}
           <div :class="[
@@ -86,6 +86,9 @@
             </div>
           </div>
         </div>
+        <div v-if="isLoading" class="text-center p-4">
+          Loading more messages...
+        </div>
       </div>
 
       <!-- Message Input -->
@@ -114,6 +117,7 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useChatStore } from '../../stores/chat'
 import { API_URL } from '../../config'
+import axios from 'axios'
 
 const props = defineProps({
   isOpen: {
@@ -130,10 +134,14 @@ const newMessage = ref('')
 const selectedChannel = ref(null)
 const selectedDM = ref(null)
 const messagesContainer = ref(null)
+const isLoading = ref(false)
+const hasMoreMessages = ref(true)
+const page = ref(1)
 
 onMounted(async () => {
   console.log('ChatSidebar mounted, initializing...')
   await chatStore.initialize()
+  setupScrollListener()
 })
 
 const channels = computed(() => chatStore.channels)
@@ -148,6 +156,8 @@ const selectChannel = async (channel) => {
   selectedDM.value = null
   await chatStore.loadChannelHistory(channel.id)
   chatStore.markAsRead(channel.id)
+  page.value = 1
+  hasMoreMessages.value = true
 }
 
 const selectDM = async (dm) => {
@@ -155,6 +165,8 @@ const selectDM = async (dm) => {
   selectedChannel.value = null
   await chatStore.loadDirectMessageHistory(dm.id)
   chatStore.markAsRead(dm.id)
+  page.value = 1
+  hasMoreMessages.value = true
 }
 
 const sendMessage = async () => {
@@ -171,14 +183,84 @@ const sendMessage = async () => {
   })
 }
 
-const formatDate = (date) => {
-  return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+const formatDate = (dateString) => {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24))
+
+  if (diffDays === 0) {
+    // Today: show time
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  } else if (diffDays === 1) {
+    return 'Yesterday'
+  } else if (diffDays < 7) {
+    return date.toLocaleDateString([], { weekday: 'short' })
+  } else {
+    return date.toLocaleDateString([], { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    })
+  }
 }
 
-const getProfileImageUrl = (profileImage) => {
-  if (!profileImage) return null
-  console.log('Profile image URL:', `${API_URL}/uploads/profile/${profileImage}`)
-  return `${API_URL}/uploads/profile/${profileImage}`
+const loadMoreMessages = async () => {
+  if (isLoading.value || !hasMoreMessages.value) return
+
+  isLoading.value = true
+  try {
+    let response
+    if (selectedChannel.value) {
+      response = await axios.get(`/api/messages/channel/${selectedChannel.value.id}`, {
+        params: { 
+          page: page.value, 
+          limit: 50 
+        }
+      })
+      // Use the store's prependMessages method
+      chatStore.prependMessages(selectedChannel.value.id, response.data.messages)
+    } else if (selectedDM.value) {
+      response = await axios.get(`/api/messages/direct/${selectedDM.value.id}`, {
+        params: { 
+          page: page.value, 
+          limit: 50 
+        }
+      })
+      // Use the store's prependMessages method
+      chatStore.prependMessages(selectedDM.value.id, response.data.messages)
+    } else {
+      return
+    }
+
+    hasMoreMessages.value = response.data.hasMore
+    if (response.data.messages.length > 0) {
+      page.value++
+    }
+
+    // Maintain scroll position after loading
+    nextTick(() => {
+      if (messagesContainer.value) {
+        const currentScrollHeight = messagesContainer.value.scrollHeight
+        const currentScrollTop = messagesContainer.value.scrollTop
+        messagesContainer.value.scrollTop = currentScrollHeight - currentScrollTop
+      }
+    })
+  } catch (error) {
+    console.error('Error loading more messages:', error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+const setupScrollListener = () => {
+  const container = messagesContainer.value
+  if (!container) return
+
+  container.addEventListener('scroll', () => {
+    if (container.scrollTop === 0) {
+      loadMoreMessages()
+    }
+  })
 }
 
 const scrollToBottom = () => {

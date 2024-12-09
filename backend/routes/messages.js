@@ -8,20 +8,25 @@ router.get('/test', (req, res) => {
     res.json({ message: 'Messages router is working' });
 });
 
-// Get direct messages between two users
+// Get direct messages
 router.get('/direct/:targetUserId', verifyToken, async (req, res) => {
     console.log('Fetching direct messages for users:', req.user.userId, req.params.targetUserId);
     try {
         const currentUserId = req.user.userId;
         const targetUserId = parseInt(req.params.targetUserId);
-        const messages = await Message.getDirectMessages(currentUserId, targetUserId);
-        console.log('Found direct messages with profile images:', messages.map(m => ({
-            id: m.id,
-            content: m.content,
-            sender_username: m.sender_username,
-            profile_image: m.profile_image
-        })));
-        res.json(messages);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
+        
+        const messages = await Message.getDirectMessages(currentUserId, targetUserId, page, limit);
+        const totalCount = await Message.countDirectMessages(currentUserId, targetUserId);
+        
+        res.json({
+            messages,
+            totalCount,
+            page,
+            limit,
+            hasMore: totalCount > page * limit
+        });
     } catch (error) {
         console.error('Error fetching direct messages:', error);
         res.status(500).json({ message: 'Error fetching messages' });
@@ -36,18 +41,19 @@ router.get('/channel/:channelId', verifyToken, async (req, res) => {
     
     try {
         const channelId = parseInt(req.params.channelId);
-        console.log('Executing database query for channel:', channelId);
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 50;
         
-        const messages = await Message.getChannelMessages(channelId);
-        console.log('Database query completed');
-        console.log('Messages with profile images:', messages.map(m => ({
-            id: m.id,
-            content: m.content,
-            sender_username: m.sender_username,
-            profile_image: m.profile_image
-        })));
+        const messages = await Message.getChannelMessages(channelId, page, limit);
+        const totalCount = await Message.countChannelMessages(channelId);
         
-        res.json(messages);
+        res.json({
+            messages,
+            totalCount,
+            page,
+            limit,
+            hasMore: totalCount > page * limit
+        });
     } catch (error) {
         console.error('Error details:', error);
         console.error('Stack trace:', error.stack);
