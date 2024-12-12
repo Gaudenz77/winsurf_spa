@@ -275,6 +275,7 @@ export const useChatStore = defineStore('chat', () => {
         const messageIndex = targetMessages.findIndex(msg => msg.id === messageId);
         
         if (messageIndex !== -1) {
+          console.log('Updating reaction for message:', targetMessages[messageIndex]); // Debug logging
           // Initialize reactions if not exists
           if (!targetMessages[messageIndex].reactions) {
             targetMessages[messageIndex].reactions = {};
@@ -293,6 +294,7 @@ export const useChatStore = defineStore('chat', () => {
               currentReaction.userIds.push(authStore.user.id);
             }
           }
+          console.log('Updated message after adding reaction:', targetMessages[messageIndex]); // Debug logging
         }
       }
       

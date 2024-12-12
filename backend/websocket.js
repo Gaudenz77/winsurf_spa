@@ -87,6 +87,9 @@ class WebSocketServer {
                 case 'CHAT_MESSAGE':
                     await this.handleChatMessage(ws, data);
                     break;
+                case 'REACT_MESSAGE':
+                    this.broadcastReaction(data);
+                    break;
                 default:
                     console.warn('Unknown message type:', data.type);
             }
@@ -227,6 +230,13 @@ class WebSocketServer {
                 client.send(JSON.stringify(message));
             }
         });
+    }
+
+    // Handle message reactions
+    broadcastReaction(data) {
+        console.log('Broadcasting reaction:', data);
+        console.log('Broadcasting to clients:', this.wss.clients);
+        this.broadcast(data);
     }
 }
 
