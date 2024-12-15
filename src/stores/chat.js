@@ -48,7 +48,8 @@ export const useChatStore = defineStore('chat', () => {
       profile_image: data.profile_image ? `${API_URL}/${data.profile_image}` : null,
       timestamp: new Date(data.timestamp),
       senderId: data.senderId,
-      targetId
+      targetId,
+      reactions: data.reactions || {} // Ensure reactions are included
     }
 
     // Add message to state
@@ -146,7 +147,8 @@ export const useChatStore = defineStore('chat', () => {
         profile_image: authStore.user.profile_image ? `${API_URL}/${authStore.user.profile_image}` : null,
         senderId: authStore.user.id,
         timestamp: new Date(),
-        targetId
+        targetId,
+        reactions: {} // Initialize reactions as empty
       }
       
       // Add message optimistically
@@ -161,7 +163,8 @@ export const useChatStore = defineStore('chat', () => {
         senderUsername: authStore.user.username,
         profile_image: authStore.user.profile_image,
         senderId: authStore.user.id,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        reactions: optimisticMessage.reactions // Include reactions in the message
       }))
       
       return true
@@ -190,7 +193,7 @@ export const useChatStore = defineStore('chat', () => {
         messages.value[channelId] = [];
       }
       
-      // Update messages with history
+      // Update messages with history, including reactions
       messages.value[channelId] = (response.messages || []).map(msg => ({
         id: msg.id,
         content: msg.content,
@@ -198,7 +201,8 @@ export const useChatStore = defineStore('chat', () => {
         profile_image: msg.profile_image ? `${API_URL}/${msg.profile_image}` : null,
         senderId: msg.sender_id,
         timestamp: new Date(msg.created_at),
-        targetId: channelId
+        targetId: channelId,
+        reactions: msg.reactions || {} // Ensure reactions are included
       }));
 
       return messages.value[channelId];
@@ -219,7 +223,7 @@ export const useChatStore = defineStore('chat', () => {
         messages.value[otherUserId] = [];
       }
       
-      // Update messages with history
+      // Update messages with history, including reactions
       messages.value[otherUserId] = (response.messages || []).map(msg => ({
         id: msg.id,
         content: msg.content,
@@ -227,7 +231,8 @@ export const useChatStore = defineStore('chat', () => {
         profile_image: msg.profile_image ? `${API_URL}/${msg.profile_image}` : null,
         senderId: msg.sender_id,
         timestamp: new Date(msg.created_at),
-        targetId: otherUserId
+        targetId: otherUserId,
+        reactions: msg.reactions || {} // Ensure reactions are included
       }));
 
       return messages.value[otherUserId];
@@ -254,7 +259,8 @@ export const useChatStore = defineStore('chat', () => {
         profile_image: msg.profile_image ? `${API_URL}/${msg.profile_image}` : null,
         senderId: msg.sender_id,
         timestamp: new Date(msg.created_at),
-        targetId
+        targetId,
+        reactions: msg.reactions || {} // Ensure reactions are included
       }));
   
     // Sort messages by timestamp to ensure correct order

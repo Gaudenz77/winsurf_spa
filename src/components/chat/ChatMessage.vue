@@ -78,7 +78,7 @@ const props = defineProps({
     required: true
   }
 })
-
+console.log('Message Reactions:', props.message.reactions); // Add this line to log reactions
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 

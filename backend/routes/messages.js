@@ -14,39 +14,17 @@ router.get('/direct/:targetUserId', verifyToken, async (req, res) => {
     try {
         const currentUserId = req.user.userId;
         const targetUserId = parseInt(req.params.targetUserId);
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 50;
         
-        // First, try to get total message count
-        const totalCount = await Message.countDirectMessages(currentUserId, targetUserId);
-        console.log('Total message count:', totalCount);
-
-        // If it's the first page and there are messages, try to get ALL messages
-        let messages;
-        let hasMore = false;
-        if (page === 1 && totalCount > 0) {
-            messages = await Message.getAllMessages(targetUserId, 'direct');
-            hasMore = false;  // We've retrieved all messages
-        } else {
-            // Fallback to paginated retrieval
-            messages = await Message.getDirectMessages(currentUserId, targetUserId, page, limit);
-            hasMore = (page * limit) < totalCount;
-        }
+        // Fetch all direct messages without pagination
+        const messages = await Message.getAllMessages(targetUserId, 'direct');
         
         console.log('Response details:', {
             messageCount: messages.length,
-            totalCount,
-            page,
-            limit,
-            hasMore
         });
         
         res.json({
             messages,
-            totalCount,
-            page,
-            limit,
-            hasMore
+            totalCount: messages.length, // Total count of messages
         });
     } catch (error) {
         console.error('Error fetching direct messages:', error);
@@ -62,39 +40,17 @@ router.get('/channel/:channelId', verifyToken, async (req, res) => {
     
     try {
         const channelId = parseInt(req.params.channelId);
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 50;
         
-        // First, try to get total message count
-        const totalCount = await Message.getTotalMessageCount(channelId, 'channel');
-        console.log('Total message count:', totalCount);
-
-        // If it's the first page and there are messages, try to get ALL messages
-        let messages;
-        let hasMore = false;
-        if (page === 1 && totalCount > 0) {
-            messages = await Message.getAllMessages(channelId, 'channel');
-            hasMore = false;  // We've retrieved all messages
-        } else {
-            // Fallback to paginated retrieval
-            messages = await Message.getChannelMessages(channelId, page, limit);
-            hasMore = (page * limit) < totalCount;
-        }
+        // Fetch all channel messages including reactions
+        const messages = await Message.getAllMessages(channelId, 'channel');
         
         console.log('Response details:', {
             messageCount: messages.length,
-            totalCount,
-            page,
-            limit,
-            hasMore
         });
         
         res.json({
             messages,
-            totalCount,
-            page,
-            limit,
-            hasMore
+            totalCount: messages.length, // Total count of messages
         });
     } catch (error) {
         console.error('Error details:', error);

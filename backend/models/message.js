@@ -33,7 +33,7 @@ class Message {
             });
 
             const query = `
-                SELECT m.*, u.username as sender_username, u.profile_image 
+                SELECT m.*, u.username as sender_username, u.profile_image
                 FROM messages m 
                 JOIN users u ON m.sender_id = u.id 
                 WHERE m.target_id = ? AND m.message_type = 'channel' 
@@ -66,6 +66,7 @@ class Message {
             throw error;
         }
     }
+
 
     static async countChannelMessages(channelId) {
         try {
@@ -220,15 +221,26 @@ class Message {
                 targetId,
                 messageType
             });
-
+    
             const query = `
-                SELECT m.*, u.username as sender_username, u.profile_image 
+                SELECT m.*, 
+                       u.username AS sender_username, 
+                       u.profile_image,
+                       JSON_OBJECTAGG(mr.reaction, mr.reaction_count) AS reactions
                 FROM messages m 
                 JOIN users u ON m.sender_id = u.id 
+                LEFT JOIN (
+                    SELECT mr.message_id, 
+                           mr.reaction, 
+                           COUNT(mr.user_id) AS reaction_count
+                    FROM message_reactions mr
+                    GROUP BY mr.message_id, mr.reaction
+                ) AS mr ON mr.message_id = m.id
                 WHERE m.target_id = ? AND m.message_type = ?
+                GROUP BY m.id, u.username, u.profile_image
                 ORDER BY m.created_at ASC
             `;
-
+    
             const [messages] = await db.query(query, [targetId, messageType]);
             
             console.log('Retrieved ALL messages:', {
@@ -236,7 +248,7 @@ class Message {
                 firstMessage: messages.length > 0 ? messages[0].created_at : null,
                 lastMessage: messages.length > 0 ? messages[messages.length - 1].created_at : null
             });
-
+    
             return messages;
         } catch (error) {
             console.error('Error in getAllMessages:', error);
@@ -306,7 +318,7 @@ class Message {
             if (!messageIds || messageIds.length === 0) {
                 return {};
             }
-
+    
             const placeholders = messageIds.map(() => '?').join(',');
             const query = `
                 SELECT 
@@ -318,9 +330,9 @@ class Message {
                 WHERE message_id IN (${placeholders})
                 GROUP BY message_id, reaction
             `;
-
+    
             const [reactions] = await db.query(query, messageIds);
-            
+    
             // Transform reactions into a more usable format
             const reactionMap = {};
             reactions.forEach(reaction => {
@@ -329,10 +341,10 @@ class Message {
                 }
                 reactionMap[reaction.message_id][reaction.reaction] = {
                     count: reaction.count,
-                    userIds: JSON.parse(reaction.user_ids)
+                    userIds: JSON.parse(reaction.user_ids) // Ensure user_ids is parsed correctly
                 };
             });
-
+    
             return reactionMap;
         } catch (error) {
             console.error('Error getting message reactions:', error);
