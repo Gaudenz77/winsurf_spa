@@ -8,6 +8,7 @@ export const useChatStore = defineStore('chat', () => {
   const authStore = useAuthStore()
   const ws = ref(null)
 
+  const reactions = ref({});
   // State
   const channels = ref([])
   const directMessages = ref([])
@@ -26,7 +27,7 @@ export const useChatStore = defineStore('chat', () => {
       messages.value[targetId] = []
     }
     // Use Vue's reactivity to update the array
-    messages.value[targetId] = [...messages.value[targetId], message]
+    messages.value[targetId].push(message)  // Simplified array update
   }
 
   // Handle new message
@@ -49,14 +50,11 @@ export const useChatStore = defineStore('chat', () => {
       timestamp: new Date(data.timestamp),
       senderId: data.senderId,
       targetId,
-      reactions: data.reactions || {} // Ensure reactions are included
+      reactions: data.reactions ? JSON.parse(data.reactions) : {} // Ensure reactions are parsed correctly
     }
 
     // Add message to state
-    if (!messages.value[targetId]) {
-      messages.value[targetId] = []
-    }
-    messages.value[targetId] = [...messages.value[targetId], message]
+    addMessage(message)
     
     // Increment unread count if not our message
     if (senderId !== authStore.user.id) {
@@ -93,7 +91,7 @@ export const useChatStore = defineStore('chat', () => {
     ws.value.onclose = () => {
       console.log('WebSocket connection closed')
       // Attempt to reconnect after a delay
-      setTimeout(initializeWebSocket, 3000)
+      setTimeout(initializeWebSocket, 5000) // Increased delay for retries
     }
 
     ws.value.onerror = (error) => {
@@ -109,7 +107,7 @@ export const useChatStore = defineStore('chat', () => {
       initializeWebSocket()
       console.log('WebSocket initialized, setting up channels...')
 
-      // Set up channels
+      // Set up channels (can be dynamically fetched from an API in a real-world scenario)
       channels.value = [
         { id: 1, name: 'general' },
         { id: 2, name: 'random' },
@@ -273,78 +271,26 @@ export const useChatStore = defineStore('chat', () => {
   // Add methods for message reactions
   const addMessageReaction = async (targetId, messageId, reaction) => {
     try {
-      const result = await ChatService.addMessageReaction(messageId, reaction);
-      
-      // Update local state
-      if (result.success) {
-        const targetMessages = messages.value[targetId];
-        const messageIndex = targetMessages.findIndex(msg => msg.id === messageId);
+        const result = await ChatService.addMessageReaction(messageId, reaction);
         
-        if (messageIndex !== -1) {
-          console.log('Updating reaction for message:', targetMessages[messageIndex]); // Debug logging
-          // Initialize reactions if not exists
-          if (!targetMessages[messageIndex].reactions) {
-            targetMessages[messageIndex].reactions = {};
-          }
-          
-          // Update or add reaction
-          if (!targetMessages[messageIndex].reactions[reaction]) {
-            targetMessages[messageIndex].reactions[reaction] = {
-              count: 1,
-              userIds: [authStore.user.id]
-            };
-          } else {
-            const currentReaction = targetMessages[messageIndex].reactions[reaction];
-            currentReaction.count++;
-            if (!currentReaction.userIds.includes(authStore.user.id)) {
-              currentReaction.userIds.push(authStore.user.id);
-            }
-          }
-          console.log('Updated message after adding reaction:', targetMessages[messageIndex]); // Debug logging
-        }
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('Error adding message reaction:', error);
-      throw error;
-    }
-  };
+        // Update local state
+        if (result.success) {
+            const targetMessages = messages.value[targetId];
+            const messageIndex = targetMessages.findIndex(msg => msg.id === messageId);
+            
+            if (messageIndex !== -1) {
+                // Initialize reactions if not exists
+                if (!targetMessages[messageIndex].reactions) {
+                    targetMessages[messageIndex].reactions = {};
+                } else if (typeof targetMessages[messageIndex].reactions === 'string') {
+                    targetMessages[messageIndex].reactions = JSON.parse(targetMessages[messageIndex].reactions);
+                }
 
-  // Remove a reaction from a message
-  const removeMessageReaction = async (targetId, messageId, reaction) => {
-    try {
-      const result = await ChatService.removeMessageReaction(messageId, reaction);
-      
-      // Update local state
-      if (result.success) {
-        const targetMessages = messages.value[targetId];
-        const messageIndex = targetMessages.findIndex(msg => msg.id === messageId);
-        
-        if (messageIndex !== -1 && targetMessages[messageIndex].reactions) {
-          const currentReaction = targetMessages[messageIndex].reactions[reaction];
-          
-          if (currentReaction) {
-            currentReaction.count--;
-            
-            // Remove user from userIds
-            const userIndex = currentReaction.userIds.indexOf(authStore.user.id);
-            if (userIndex !== -1) {
-              currentReaction.userIds.splice(userIndex, 1);
+                targetMessages[messageIndex].reactions[reaction] = (targetMessages[messageIndex].reactions[reaction] || 0) + 1;
             }
-            
-            // Remove reaction entirely if count reaches 0
-            if (currentReaction.count === 0) {
-              delete targetMessages[messageIndex].reactions[reaction];
-            }
-          }
         }
-      }
-      
-      return result;
     } catch (error) {
-      console.error('Error removing message reaction:', error);
-      throw error;
+        console.error('Error adding reaction:', error);
     }
   };
 
@@ -361,6 +307,5 @@ export const useChatStore = defineStore('chat', () => {
     loadDirectMessageHistory,
     prependMessages,
     addMessageReaction,
-    removeMessageReaction
   }
 })

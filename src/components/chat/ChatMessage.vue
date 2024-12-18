@@ -29,18 +29,23 @@
           {{ message.content }}
         </div>
         
-        <!-- Reactions Display -->
-        <div v-if="message.reactions && Object.keys(message.reactions).length" class="reactions-display">
-          <div 
-            v-for="(reactionData, reaction) in message.reactions" 
-            :key="reaction" 
-            class="reaction-item"
-            @click="toggleReaction(reaction)"
-          >
-            <span class="reaction-emoji">{{ getReactionEmoji(reaction) }}</span>
-            <span class="reaction-count">{{ reactionData.count }}</span>
-          </div>
-        </div>
+<!-- Reactions Display -->
+<div 
+  v-if="Object.values(messageReactions).some(reaction => reaction.count > 0)" 
+  class="reactions-display"
+>
+  <div 
+    v-for="(reactionData, reaction) in messageReactions" 
+    :key="reaction" 
+    class="reaction-item"
+    @click="toggleReaction(reaction)"
+  >
+    <span class="reaction-emoji">{{ getReactionEmoji(reaction) }}</span>
+    <span class="reaction-count" v-if="reactionData.count > 0">{{ reactionData.count }}</span>
+  </div>
+</div>
+
+
       </div>
     </div>
 
@@ -78,7 +83,7 @@ const props = defineProps({
     required: true
   }
 })
-console.log('Message Reactions:', props.message.reactions); // Add this line to log reactions
+
 const authStore = useAuthStore()
 const chatStore = useChatStore()
 
@@ -96,36 +101,58 @@ const availableReactions = [
   'celebrate'
 ]
 
+// Default reactions structure
+const initializedReactions = {
+  "thumbs_up": { count: 0, userIds: [] },
+  "sad": { count: 0, userIds: [] },
+  "laugh": { count: 0, userIds: [] },
+  "angry": { count: 0, userIds: [] },
+  "celebrate": { count: 0, userIds: [] },
+};
+
+// Compute message reactions, merging defaults with existing ones
+const messageReactions = computed(() => {
+  console.log('Message Reactions:', props.message.reactions);
+  const reactions = { ...initializedReactions }; // Initialize reactions structure
+
+  if (props.message.reactions) {
+    Object.keys(props.message.reactions).forEach((reaction) => {
+      if (reactions[reaction]) {
+        reactions[reaction].count = props.message.reactions[reaction];
+      }
+    });
+  }
+
+  return reactions; // Do not filter out counts <= 0
+});
+
+
+
+
 const isSentByCurrentUser = computed(() => 
   props.message.senderId === authStore.user.id
 )
 
 function handleMouseEnter() {
-  // Clear any existing timer
   if (reactionTimerRef.value) {
     clearTimeout(reactionTimerRef.value)
   }
-  
-  // Show reactions immediately
   showReactions.value = true
 }
 
 function handleMouseLeave() {
-  // Delay hiding the reactions to allow interaction
   reactionTimerRef.value = setTimeout(() => {
     showReactions.value = false
-  }, 500) // 500ms delay to allow moving to reaction picker
+  }, 500)
 }
 
 function handleReactionPickerEnter() {
-  // Clear the hide timer if mouse moves to reaction picker
   if (reactionTimerRef.value) {
     clearTimeout(reactionTimerRef.value)
   }
 }
 
 function handleReactionPickerLeave() {
-  // Hide reactions after leaving the picker
   reactionTimerRef.value = setTimeout(() => {
     showReactions.value = false
   }, 200)
@@ -154,31 +181,28 @@ function formatMessageTime(timestamp) {
 }
 
 async function addReaction(reaction) {
-  try {
-    await chatStore.addMessageReaction(
-      props.targetId, 
-      props.message.id, 
-      reaction
-    )
-  } catch (error) {
-    console.error('Failed to add reaction:', error)
-  }
+    try {
+        await chatStore.addMessageReaction(
+            props.targetId, 
+            props.message.id, 
+            reaction
+        )
+    } catch (error) {
+        console.error('Failed to add reaction:', error)
+    }
 }
 
 async function toggleReaction(reaction) {
   try {
-    // Check if user has already reacted
-    const userReactions = props.message.reactions[reaction]?.userIds || []
+    const userReactions = messageReactions.value[reaction]?.userIds || []
     
     if (userReactions.includes(authStore.user.id)) {
-      // Remove reaction if already added
       await chatStore.removeMessageReaction(
         props.targetId, 
         props.message.id, 
         reaction
       )
     } else {
-      // Add reaction
       await chatStore.addMessageReaction(
         props.targetId, 
         props.message.id, 

@@ -10,17 +10,21 @@ router.get('/test', (req, res) => {
 
 // Get direct messages with additional metadata
 router.get('/direct/:targetUserId', verifyToken, async (req, res) => {
-    console.log('Fetching direct messages for users:', req.user.userId, req.params.targetUserId);
     try {
         const currentUserId = req.user.userId;
         const targetUserId = parseInt(req.params.targetUserId);
+
+        // Validate targetUserId
+        if (isNaN(targetUserId)) {
+            return res.status(400).json({ message: 'Invalid target user ID' });
+        }
+
+        console.log(`Fetching direct messages for users: ${currentUserId}, Target: ${targetUserId}`);
         
         // Fetch all direct messages without pagination
         const messages = await Message.getAllMessages(targetUserId, 'direct');
         
-        console.log('Response details:', {
-            messageCount: messages.length,
-        });
+        console.log('Message count:', messages.length);
         
         res.json({
             messages,
@@ -28,33 +32,33 @@ router.get('/direct/:targetUserId', verifyToken, async (req, res) => {
         });
     } catch (error) {
         console.error('Error fetching direct messages:', error);
-        res.status(500).json({ message: 'Error fetching messages' });
+        res.status(500).json({ message: 'Error fetching messages', error: error.message });
     }
 });
 
 // Get channel messages with additional metadata
 router.get('/channel/:channelId', verifyToken, async (req, res) => {
-    console.log('=== Channel Messages Request ===');
-    console.log('User:', req.user);
-    console.log('Channel ID:', req.params.channelId);
-    
     try {
         const channelId = parseInt(req.params.channelId);
-        
+
+        // Validate channelId
+        if (isNaN(channelId)) {
+            return res.status(400).json({ message: 'Invalid channel ID' });
+        }
+
+        console.log('Fetching channel messages for Channel ID:', channelId);
+
         // Fetch all channel messages including reactions
         const messages = await Message.getAllMessages(channelId, 'channel');
         
-        console.log('Response details:', {
-            messageCount: messages.length,
-        });
+        console.log('Message count:', messages.length);
         
         res.json({
             messages,
             totalCount: messages.length, // Total count of messages
         });
     } catch (error) {
-        console.error('Error details:', error);
-        console.error('Stack trace:', error.stack);
+        console.error('Error fetching channel messages:', error);
         res.status(500).json({ message: 'Error fetching messages', error: error.message });
     }
 });
@@ -66,17 +70,18 @@ router.post('/:messageId/react', verifyToken, async (req, res) => {
         const userId = req.user.userId;
         const { reaction } = req.body;
 
-        console.log('Adding reaction:', {
-            messageId,
-            userId,
-            reaction
-        });
+        // Validate reaction input
+        if (!reaction) {
+            return res.status(400).json({ message: 'Reaction type is required' });
+        }
+
+        console.log(`Adding reaction: Message ID: ${messageId}, User: ${userId}, Reaction: ${reaction}`);
 
         const result = await Message.addReaction(messageId, userId, reaction);
         
         res.json({
             success: true,
-            reaction: result
+            reaction: result,
         });
     } catch (error) {
         console.error('Error adding reaction:', error);
@@ -94,17 +99,18 @@ router.delete('/:messageId/react', verifyToken, async (req, res) => {
         const userId = req.user.userId;
         const { reaction } = req.body;
 
-        console.log('Removing reaction:', {
-            messageId,
-            userId,
-            reaction
-        });
+        // Validate reaction input
+        if (!reaction) {
+            return res.status(400).json({ message: 'Reaction type is required' });
+        }
+
+        console.log(`Removing reaction: Message ID: ${messageId}, User: ${userId}, Reaction: ${reaction}`);
 
         const result = await Message.removeReaction(messageId, userId, reaction);
         
         res.json({
             success: true,
-            reaction: result
+            reaction: result,
         });
     } catch (error) {
         console.error('Error removing reaction:', error);

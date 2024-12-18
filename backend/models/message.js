@@ -47,12 +47,13 @@ class Message {
             if (messages.length > 0) {
                 const messageIds = messages.map(m => m.id);
                 const reactions = await this.getMessageReactions(messageIds);
-                
-                // Attach reactions to messages
+            
+                // Attach reactions to each message
                 messages.forEach(message => {
                     message.reactions = reactions[message.id] || {};
                 });
             }
+            
 
             console.log('Retrieved channel messages:', {
                 messageCount: messages.length,
@@ -333,24 +334,50 @@ class Message {
     
             const [reactions] = await db.query(query, messageIds);
     
-            // Transform reactions into a more usable format
             const reactionMap = {};
+            const defaultReactions = {
+                "thumbs_up": { count: 0, userIds: [] },
+                "sad": { count: 0, userIds: [] },
+                "laugh": { count: 0, userIds: [] },
+                "heart": { count: 0, userIds: [] },
+                "wow": { count: 0, userIds: [] },
+                "angry": { count: 0, userIds: [] },
+                "celebrate": { count: 0, userIds: [] }
+            };
+    
             reactions.forEach(reaction => {
                 if (!reactionMap[reaction.message_id]) {
-                    reactionMap[reaction.message_id] = {};
+                    reactionMap[reaction.message_id] = { ...defaultReactions };
                 }
+    
+                let userIds = [];
+                try {
+                    userIds = JSON.parse(reaction.user_ids);
+                } catch (e) {
+                    console.error('Error parsing user_ids:', e);
+                }
+    
                 reactionMap[reaction.message_id][reaction.reaction] = {
                     count: reaction.count,
-                    userIds: JSON.parse(reaction.user_ids) // Ensure user_ids is parsed correctly
+                    userIds
                 };
+            });
+    
+            // Ensure all messages have default reactions
+            messageIds.forEach(id => {
+                if (!reactionMap[id]) {
+                    reactionMap[id] = { ...defaultReactions };
+                }
             });
     
             return reactionMap;
         } catch (error) {
-            console.error('Error getting message reactions:', error);
+            console.error('Error in getMessageReactions:', error);
             throw error;
         }
     }
+    
+    
 }
 
 module.exports = Message;
